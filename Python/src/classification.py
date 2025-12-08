@@ -5,7 +5,9 @@ from collections import Counter
 # SVM + Scaling + LOSO
 from sklearn.svm import SVC
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import LeaveOneGroupOut, GridSearchCV
+from sklearn.model_selection import LeaveOneGroupOut, GridSearchCV, GroupKFold
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import make_scorer
 
 # Iteration 1
 from sklearn.neighbors import KNeighborsClassifier
@@ -31,11 +33,12 @@ def train_classifier(features, labels, config):
 
     Iteration 1 → k-NN + SMOTE + 5-fold CV
     Iteration 2 → SVM + StandardScaler + LOSO CV
-    Iteration 3 → RandomForest
+    Iteration 3 → Random Forest (simple training)
+    Iteration 4 → Random Forest + hyperparameter tuning + LOSO
 
-    Return ALWAYS:
+    Returns:
         model, scaler
-    where scaler can be None (e.g. for kNN / RF).
+    where scaler can be None (e.g., for kNN / simple RF).
     """
 
     print(f"\n====================================================")
@@ -45,9 +48,9 @@ def train_classifier(features, labels, config):
     print(f"Labels shape:   {labels.shape}\n")
 
     if features.shape[1] == 0:
-        raise ValueError("❌ ERROR: No features provided!")
+        raise ValueError("ERROR: No features provided!")
 
-    # default om ingen scaler används (iter 1 & 3)
+    # Default when no scaler is used (e.g. iterations 1 and 3)
     scaler = None
 
     # ============================================================
@@ -69,7 +72,7 @@ def train_classifier(features, labels, config):
             X_train, X_test, y_train, y_test = train_test_split(
                 features, labels, test_size=0.2, random_state=42
             )
-            print("⚠ Stratified split failed — falling back to non-stratified")
+            print("Stratified split failed — falling back to non-stratified split")
 
         print(f"Train samples: {X_train.shape[0]}, Test samples: {X_test.shape[0]}")
 
@@ -77,12 +80,12 @@ def train_classifier(features, labels, config):
         # Handle class imbalance
         # -------------------------
         print("\nApplying SMOTE oversampling...")
-        print("Original distribution:", Counter(y_train))
+        print("Original class distribution:", Counter(y_train))
 
         sm = SMOTE(random_state=42)
         X_train, y_train = sm.fit_resample(X_train, y_train)
 
-        print("Balanced distribution:", Counter(y_train))
+        print("Balanced class distribution:", Counter(y_train))
 
         # -------------------------
         # Build and evaluate model
@@ -115,7 +118,7 @@ def train_classifier(features, labels, config):
         except Exception:
             print("ROC-AUC not available for k-NN.")
 
-        # 🔁 Viktigt: returnera (model, scaler)
+        # Important: always return (model, scaler)
         return model, scaler
 
     # ============================================================
@@ -125,12 +128,11 @@ def train_classifier(features, labels, config):
 
         print("\n=== Iteration 2: SVM + LOSO Cross-Validation ===\n")
 
-        # ---------------------------------------
         # Require subject IDs for LOSO
-        # ---------------------------------------
         if not hasattr(config, "record_ids"):
             raise ValueError(
-                "❌ ERROR: Iteration 2 requires config.record_ids (subject ID per epoch)"
+                "ERROR: Iteration 2 requires config.record_ids (subject ID per epoch). "
+                "Set config.record_ids = record_ids in main.py before calling train_classifier."
             )
 
         groups = np.array(config.record_ids)
@@ -140,9 +142,7 @@ def train_classifier(features, labels, config):
         fold_idx = 1
         best_overall_params = None
 
-        # ====================================================
-        # LOSO LOOP  — one subject held out per fold
-        # ====================================================
+        # LOSO loop — one subject held out per fold
         for train_idx, test_idx in logo.split(features, labels, groups):
 
             test_subject = groups[test_idx][0]
@@ -151,16 +151,12 @@ def train_classifier(features, labels, config):
             X_train, X_test = features[train_idx], features[test_idx]
             y_train, y_test = labels[train_idx], labels[test_idx]
 
-            # -----------------------------
             # Standardization (critical!)
-            # -----------------------------
             inner_scaler = StandardScaler()
             X_train_scaled = inner_scaler.fit_transform(X_train)
             X_test_scaled = inner_scaler.transform(X_test)
 
-            # -----------------------------
             # Small hyperparameter grid
-            # -----------------------------
             param_grid = {
                 "C": [0.1, 1, 10],
                 "gamma": ["scale", 0.01, 0.001],
@@ -183,9 +179,7 @@ def train_classifier(features, labels, config):
             # Save last best params for final model
             best_overall_params = grid.best_params_
 
-            # -----------------------------
             # Evaluate fold
-            # -----------------------------
             y_pred = best_svm.predict(X_test_scaled)
             acc = accuracy_score(y_test, y_pred)
             kappa = cohen_kappa_score(y_test, y_pred)
@@ -195,10 +189,7 @@ def train_classifier(features, labels, config):
             loso_results.append({"accuracy": acc, "kappa": kappa})
             fold_idx += 1
 
-        # ------------------------------------------
-        # Final Model (trained on ALL data)
-        # ------------------------------------------
-
+        # Final SVM model (trained on ALL data)
         scaler = StandardScaler()
         X_scaled_all = scaler.fit_transform(features)
 
@@ -217,28 +208,166 @@ def train_classifier(features, labels, config):
         return model, scaler
 
     # ============================================================
-    # ITERATION 3 — Random Forest
+    # ITERATION 3 — Basic Random Forest (no LOSO)
     # ============================================================
-    elif config.CURRENT_ITERATION >= 3:
+    elif config.CURRENT_ITERATION == 3:
 
-        print("\n=== Iteration 3+: Random Forest ===\n")
+        print("\n=== Iteration 3: Random Forest ===\n")
 
         model = RandomForestClassifier(
             n_estimators=config.RF_N_ESTIMATORS,
             max_depth=config.RF_MAX_DEPTH,
             min_samples_split=config.RF_MIN_SAMPLES_SPLIT,
+            min_samples_leaf=getattr(config, "RF_MIN_SAMPLES_LEAF", 1),
+            class_weight=getattr(config, "RF_CLASS_WEIGHT", None),
             random_state=42,
             n_jobs=-1,
         )
 
         model.fit(features, labels)
-        print("Random Forest trained.")
+        print("Random Forest trained (Iteration 3).")
 
-        # Ingen scaler används här → scaler = None
+        # No scaler here
+        return model, scaler
+
+    # ============================================================
+    # ITERATION 4 — Random Forest + Hyperparameter Tuning + LOSO
+    # ============================================================
+    elif config.CURRENT_ITERATION == 4:
+
+        print("\n=== Iteration 4: Random Forest + Hyperparameter Tuning + LOSO ===\n")
+
+        # 1) Get subject groups (record_ids) for LOSO
+        if not hasattr(config, "record_ids"):
+            raise ValueError(
+                "ERROR: Iteration 4 requires config.record_ids (one subject ID per epoch). "
+                "Set config.record_ids = record_ids in main.py before calling train_classifier."
+            )
+
+        groups = np.array(config.record_ids)
+
+        # --------------------------------------------------------
+        # Step 1: Hyperparameter tuning with GroupKFold
+        # --------------------------------------------------------
+        print("\n--- Hyperparameter tuning (GroupKFold) ---")
+
+        pipe = Pipeline([
+            ("scaler", StandardScaler()),
+            ("rf", RandomForestClassifier(
+                class_weight=config.RF_CLASS_WEIGHT,
+                random_state=42,
+                n_jobs=-1
+            ))
+        ])
+
+        param_grid = {
+            "rf__n_estimators": [100, 200],
+            "rf__max_depth": [10, 20, None],
+            "rf__min_samples_split": [2, 5],
+            "rf__min_samples_leaf": [1, 2],
+        }
+
+        gkf = GroupKFold(n_splits=5)
+        scorer = make_scorer(f1_score, average="macro")
+
+        grid = GridSearchCV(
+            pipe,
+            param_grid=param_grid,
+            cv=gkf.split(features, labels, groups),
+            scoring=scorer,
+            n_jobs=-1,
+            verbose=2,
+        )
+
+        grid.fit(features, labels)
+
+        print("\nBest parameters from GroupKFold grid search:")
+        print(grid.best_params_)
+        print(f"Best macro-F1: {grid.best_score_:.3f}")
+
+        # Extract RF parameters (remove 'rf__' prefix)
+        best_rf_params = {
+            k.replace("rf__", ""): v
+            for k, v in grid.best_params_.items()
+            if k.startswith("rf__")
+        }
+
+        # --------------------------------------------------------
+        # Step 2: Final LOSO evaluation with best parameters
+        # --------------------------------------------------------
+        print("\n--- Final LOSO evaluation ---")
+        logo = LeaveOneGroupOut()
+        final_results = []
+
+        fold_idx = 1
+        for train_idx, test_idx in logo.split(features, labels, groups):
+            test_subject = groups[test_idx][0]
+            print(f"\nLOSO fold {fold_idx}: test subject = {test_subject}")
+
+            X_train, X_test = features[train_idx], features[test_idx]
+            y_train, y_test = labels[train_idx], labels[test_idx]
+
+            # Scale per fold (fit on train, apply to test)
+            fold_scaler = StandardScaler()
+            X_train_scaled = fold_scaler.fit_transform(X_train)
+            X_test_scaled = fold_scaler.transform(X_test)
+
+            rf = RandomForestClassifier(
+                **best_rf_params,
+                class_weight=config.RF_CLASS_WEIGHT,
+                random_state=42,
+                n_jobs=-1,
+            )
+            rf.fit(X_train_scaled, y_train)
+            y_pred = rf.predict(X_test_scaled)
+
+            acc = accuracy_score(y_test, y_pred)
+            kappa = cohen_kappa_score(y_test, y_pred)
+            f1m = f1_score(y_test, y_pred, average="macro")
+
+            final_results.append({
+                "accuracy": acc,
+                "kappa": kappa,
+                "f1_macro": f1m,
+            })
+
+            print(f"  Accuracy:  {acc:.3f}")
+            print(f"  Kappa:     {kappa:.3f}")
+            print(f"  F1-macro:  {f1m:.3f}")
+
+            fold_idx += 1
+
+        # Summarize LOSO results
+        accs = [r["accuracy"] for r in final_results]
+        kappas = [r["kappa"] for r in final_results]
+        f1s = [r["f1_macro"] for r in final_results]
+
+        print("\nFinal LOSO Performance (Iteration 4):")
+        print(f"  Accuracy: {np.mean(accs):.1%} ± {np.std(accs):.1%}")
+        print(f"  Kappa:    {np.mean(kappas):.3f} ± {np.std(kappas):.3f}")
+        print(f"  F1-macro: {np.mean(f1s):.3f} ± {np.std(f1s):.3f}")
+
+        # --------------------------------------------------------
+        # Step 3: Train final model on ALL data with best parameters
+        # --------------------------------------------------------
+        scaler = StandardScaler()
+        X_all_scaled = scaler.fit_transform(features)
+
+        model = RandomForestClassifier(
+            **best_rf_params,
+            class_weight=config.RF_CLASS_WEIGHT,
+            random_state=42,
+            n_jobs=-1,
+        )
+        model.fit(X_all_scaled, labels)
+
+        print("\nFinal Random Forest trained on all data (Iteration 4).")
+
+        # Return model and scaler (needed for inference / visualization)
         return model, scaler
 
     else:
-        raise ValueError("Invalid CURRENT_ITERATION in config.")
+        raise ValueError("Invalid CURRENT_ITERATION in config (must be 1–4).")
 
 
 # ============================================================

@@ -13,7 +13,6 @@ import io
 import numpy as np
 
 
-# SHIT WEEK, ADDING CACHE STORED CODE AFTER 5.CLASSIDICTAION
 class TeeOutput:
     """Class that writes to both terminal and buffer simultaneously."""
 
@@ -46,22 +45,22 @@ def main():
     sys.stdout = TeeOutput(original_stdout, stdout_buffer)
 
     print("\n=== PROCESSING LOG ===")
-
     print(f"--- Sleep Scoring Pipeline - Iteration {config.CURRENT_ITERATION} ---")
 
-    # 1. Load Data
-    # Load ALL training recordings (R1-R10)
-    # Iteration 1: EEG only (use_single_recording=True)
-    # Iterations 2-4: Multi-channel EEG+EOG+EMG (use_single_recording=False)
+    # ============================================================
+    # STEP 1: DATA LOADING
+    # ============================================================
     print("\n=== STEP 1: DATA LOADING ===")
+    # Iteration 1: EEG only (use_single_recording=True)
+    # Iterations 2–4: multi-channel (use_single_recording=False)
     use_single_recording = (config.CURRENT_ITERATION == 1)
-    # Refine,add 'record_ids'！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！！
+
     multi_channel_data, labels, record_ids, channel_info = load_all_training_data(
         config.TRAINING_DIR,
         use_single_recording=use_single_recording
     )
 
-    print(f"\nData loading summary:")
+    print("\nData loading summary:")
     if 'eeg' in multi_channel_data:
         print(f"  EEG: {multi_channel_data['eeg'].shape}")
     if 'eog' in multi_channel_data:
@@ -69,13 +68,19 @@ def main():
     if 'emg' in multi_channel_data:
         print(f"  EMG: {multi_channel_data['emg'].shape}")
     print(f"  Labels: {labels.shape}")
-    print(f"  Unique recordings: {len(np.unique(record_ids))}")
+    print(f"  Unique recordings (subjects): {len(np.unique(record_ids))}")
     print(f"  Total epochs: {len(labels)}")
 
-    # 2. Preprocessing
+    # Make record_ids available to the classification module (for LOSO / grouped CV)
+    config.record_ids = record_ids
+
+    # ============================================================
+    # STEP 2: PREPROCESSING
+    # ============================================================
     print("\n=== STEP 2: PREPROCESSING ===")
     preprocessed_data = None
     cache_filename_preprocess = f"preprocessed_data_iter{config.CURRENT_ITERATION}.joblib"
+
     if config.USE_CACHE:
         preprocessed_data = load_cache(cache_filename_preprocess, config.CACHE_DIR)
         if preprocessed_data is not None:
@@ -84,9 +89,11 @@ def main():
             if isinstance(preprocessed_data, dict) and 'eeg' in preprocessed_data:
                 cached_epochs = preprocessed_data['eeg'].shape[0]
                 if cached_epochs != len(labels):
-                    print(f"⚠️  WARNING: Cached preprocessed data ({cached_epochs} epochs) "
-                          f"doesn't match current labels ({len(labels)} epochs).")
-                    print("Clearing cache and re-preprocessing...")
+                    print(
+                        f"WARNING: Cached preprocessed data ({cached_epochs} epochs) "
+                        f"does not match current labels ({len(labels)} epochs)."
+                    )
+                    print("Clearing cache and re-running preprocessing...")
                     cache_file = os.path.join(config.CACHE_DIR, cache_filename_preprocess)
                     if os.path.exists(cache_file):
                         os.remove(cache_file)
@@ -94,7 +101,7 @@ def main():
 
     if preprocessed_data is None:
         preprocessed_data = preprocess(multi_channel_data, config, channel_info=channel_info)
-        # Expect dict with 'eeg'
+
         if isinstance(preprocessed_data, dict) and 'eeg' in preprocessed_data:
             print(f"Preprocessed EEG shape: {preprocessed_data['eeg'].shape}")
             # Validate preprocessed data matches labels
@@ -105,16 +112,19 @@ def main():
                     f"{len(labels)} epochs. Check preprocessing code."
                 )
         else:
-            print(f"Preprocessed data ready")
+            print("Preprocessed data ready")
+
         if config.USE_CACHE:
             save_cache(preprocessed_data, cache_filename_preprocess, config.CACHE_DIR)
             print("Saved preprocessed data to cache")
 
-    # 3. Feature Extraction
+    # ============================================================
+    # STEP 3: FEATURE EXTRACTION
+    # ============================================================
     print("\n=== STEP 3: FEATURE EXTRACTION ===")
-
     features = None
     cache_filename_features = f"features_iter{config.CURRENT_ITERATION}.joblib"
+
     if config.USE_CACHE:
         features = load_cache(cache_filename_features, config.CACHE_DIR)
         if features is not None:
@@ -124,7 +134,7 @@ def main():
         features = extract_features(preprocessed_data, config)
         print(f"Extracted features shape: {features.shape}")
         if features.shape[1] == 0:
-            print("⚠️  WARNING: No features extracted! Students must implement feature extraction.")
+            print("WARNING: No features extracted! Students must implement feature extraction.")
 
         # Validate features match labels before caching
         if features.shape[0] != len(labels):
@@ -139,75 +149,57 @@ def main():
     else:
         # Validate cached features match current labels
         if features.shape[0] != len(labels):
-            print(f"⚠️  WARNING: Cached features ({features.shape[0]} samples) don't match "
-                  f"current labels ({len(labels)} samples).")
+            print(
+                f"WARNING: Cached features ({features.shape[0]} samples) do not match "
+                f"current labels ({len(labels)} samples)."
+            )
             print("Clearing cache and re-extracting features...")
-            # Clear the cache file
             cache_file = os.path.join(config.CACHE_DIR, cache_filename_features)
             if os.path.exists(cache_file):
                 os.remove(cache_file)
-            # Re-extract features
             features = extract_features(preprocessed_data, config)
             print(f"Re-extracted features shape: {features.shape}")
             if config.USE_CACHE:
                 save_cache(features, cache_filename_features, config.CACHE_DIR)
                 print("Saved features to cache")
+
     print("\n=== DEBUG: Raw features shape ===", features.shape)
 
-    # 4. Feature Selection
+    # ============================================================
+    # STEP 4: FEATURE SELECTION
+    # ============================================================
     print("\n=== STEP 4: FEATURE SELECTION ===")
     # Validate features and labels match before feature selection
     if features.shape[0] != len(labels):
         raise ValueError(
             f"Cannot proceed: features ({features.shape[0]} samples) and labels "
-            f"({len(labels)} samples) don't match. Clear cache and rerun."
+            f"({len(labels)} samples) do not match. Clear cache and rerun."
         )
+
     selected_features = select_features(features, labels, config)
     print(f"Selected features shape: {selected_features.shape}")
 
-    # Validate feature selection didn't change number of samples
+    # Validate feature selection did not change the number of samples
     if selected_features.shape[0] != len(labels):
         raise ValueError(
             f"Feature selection error: selected_features ({selected_features.shape[0]} samples) "
-            f"and labels ({len(labels)} samples) don't match."
+            f"and labels ({len(labels)} samples) do not match."
         )
-    ### newly added ! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    config.record_ids = record_ids
-    ### test
-    # === DEBUG: Check variance of final features ===
-    '''print("\n=== DEBUG: Feature Variance Check (first 30 features) ===")
-    print(np.var(selected_features, axis=0)[:30])
-    print("Min variance:", np.min(np.var(selected_features, axis=0)))
-    print("Max variance:", np.max(np.var(selected_features, axis=0)))'''
 
-    '''print("\nDEBUG: record_ids distribution:")
-    unique_ids, counts = np.unique(record_ids, return_counts=True)
-    for uid, c in zip(unique_ids, counts):
-        print(f"  Subject {uid}: {c} epochs")'''
-
-    # 5. Classification
+    # ============================================================
+    # STEP 5: CLASSIFICATION
+    # ============================================================
     print("\n=== STEP 5: CLASSIFICATION ===")
     if selected_features.shape[1] > 0:
-        model, scaler = train_classifier(selected_features, labels,
-                                         config)  ############################refine，add scaler
+        model, scaler = train_classifier(selected_features, labels, config)
         print(f"Trained {config.CLASSIFIER_TYPE} classifier")
     else:
-        print("⚠️  WARNING: Cannot train classifier - no features available!")
+        print("WARNING: Cannot train classifier - no features available!")
         print("Students must implement feature extraction first.")
         model = None
+        scaler = None
 
-        # 5. Classification
-    print("\n=== STEP 5: CLASSIFICATION ===")
-    if selected_features.shape[1] > 0:
-        model, scaler = train_classifier(selected_features, labels,
-                                         config)  ############################refine，add scaler
-        print(f"Trained {config.CLASSIFIER_TYPE} classifier")
-    else:
-        print("⚠️  WARNING: Cannot train classifier - no features available!")
-        print("Students must implement feature extraction first.")
-        model = None
-    ## NEWLY ADDED
-    # === SAVE MODEL & SCALER TO CACHE FOR INFERENCE ===
+    # Save model & scaler to cache for later inference
     if model is not None:
         model_bundle = {
             "model": model,
@@ -217,21 +209,25 @@ def main():
         save_cache(model_bundle, model_cache_filename, config.CACHE_DIR)
         print(f"Saved trained model & scaler to cache: {model_cache_filename}")
 
-    # 6. Visualization
+    # ============================================================
+    # STEP 6: VISUALIZATION
+    # ============================================================
     print("\n=== STEP 6: VISUALIZATION ===")
     if model is not None:
         visualize_results(
             model,
-            selected_features,  # features
-            labels,  # labels
-            config,  # config-modulen
-            scaler=scaler,  # bara används i iter 2, ok att skicka med
+            selected_features,
+            labels,
+            config,
+            scaler=scaler,      # used in Iteration 2 and 4 (SVM / RF+LOSO)
             loso_aggregated=None
         )
     else:
         print("Skipping visualization - no trained model")
 
-    # 7. Report Generation
+    # ============================================================
+    # STEP 7: REPORT GENERATION
+    # ============================================================
     print("\n=== STEP 7: PROCESSING LOG & REPORT GENERATION ===")
 
     # Restore the original stdout
@@ -248,7 +244,7 @@ def main():
     print("\n" + "=" * 50)
     print("PIPELINE FINISHED")
     if model is None:
-        print("⚠️  Students need to implement missing components!")
+        print("WARNING: Students need to implement missing components.")
     print("=" * 50)
 
 

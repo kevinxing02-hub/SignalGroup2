@@ -2,7 +2,7 @@
 
 # Set the current iteration of the project (1-4). 
 # This controls which parts of the pipeline are active.
-CURRENT_ITERATION = 3
+CURRENT_ITERATION = 4
 
 # Set to True to use cached data for preprocessing and feature extraction.
 USE_CACHE = False  # Temporarily disabled for testing with real data
@@ -28,7 +28,7 @@ LOW_PASS_FILTER_FREQ = 40  # Hz
 
 # Whether to apply per-channel normalization in preprocessing.py
 # (e.g. zero-mean, unit-variance per epoch)
-APPLY_NORMALIZATION = True   # sätt True om du vill aktivera det
+APPLY_NORMALIZATION = True   # set True if you want to enable it
 
 # -- Feature Extraction --
 # (Add feature-specific parameters here)
@@ -60,8 +60,15 @@ WELCH_NFFT = None  # use auto FFT size unless overridden
 WAVELET_FAMILY = 'db4'  # Daubechies-4: gold standard for sleep EEG
 WAVELET_LEVELS = 5  # suitable for fs=125Hz (covers delta–beta range)
 
-# Feature_selection
-FEATURE_SELECTION_TOP_K = 40
+
+# ===============================
+#   Feature Selection Settings
+# ===============================
+FEATURE_SELECTION_ENABLED = True
+FEATURE_SELECTION_MIN_FEATURES = 100     # Only for Iteration 2
+FEATURE_SELECTION_TOP_K = 40             # Final number of features kept
+VARIANCE_THRESHOLD_RATIO = 1e-4          # Conservative variance threshold
+CORRELATION_THRESHOLD = 0.95             # Remove features with |r| > threshold
 
 # -- Classification --
 # Iteration-specific parameters - students should modify these based on current iteration
@@ -85,9 +92,11 @@ elif CURRENT_ITERATION == 3:
 elif CURRENT_ITERATION == 4:
     # Iteration 4: Full system optimization
     CLASSIFIER_TYPE = 'random_forest'
-    RF_N_ESTIMATORS = 200
-    RF_MAX_DEPTH = None
-    RF_MIN_SAMPLES_SPLIT = 5
+    RF_N_ESTIMATORS = 200  # between 100–300
+    RF_MAX_DEPTH = 20  #  e.g. 10–30,
+    RF_MIN_SAMPLES_SPLIT = 5  # between 2–10
+    RF_MIN_SAMPLES_LEAF = 2  # between 1–4
+    RF_CLASS_WEIGHT = 'balanced'
 else:
     raise ValueError(f"Invalid CURRENT_ITERATION: {CURRENT_ITERATION}. Must be 1-4.")
 

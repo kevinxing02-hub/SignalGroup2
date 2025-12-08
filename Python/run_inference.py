@@ -3,11 +3,11 @@ import traceback
 import numpy as np
 import config
 
-from src.data_loader_ite2 import load_holdout_data
+from src.data_loader import load_holdout_data
 from src.preprocessing import preprocess
 from src.feature_extraction import extract_features
-from src.inference_ite2 import make_inference, generate_submission_file
-from src.utils_ite2 import load_cache, save_cache
+from src.inference import make_inference, generate_submission_file
+from src.utils import load_cache, save_cache
 
 
 def normalize_preprocessed_output(obj):
