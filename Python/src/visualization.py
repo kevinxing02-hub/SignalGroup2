@@ -2,72 +2,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import xml.etree.ElementTree as ET
-from sklearn.preprocessing import StandardScaler
-
-# newly added function in ite3 by Kevin 12.01.2025
-def _apply_scaler_to_features(features, scaler):
-    """Robustly apply or reconstruct scaler. Returns scaled features."""
-    if scaler is None:
-        print("DEBUG: no scaler provided, returning features unchanged")
-        return features
-
-    # sklearn-like object
-    if hasattr(scaler, "transform") and callable(scaler.transform):
-        return scaler.transform(features)
-
-    # dict-like with mean/scale
-    if isinstance(scaler, dict):
-        mean = scaler.get("mean") or scaler.get("mean_")
-        scale = scaler.get("scale") or scaler.get("scale_")
-        if mean is not None and scale is not None:
-            mean = np.asarray(mean)
-            scale = np.asarray(scale)
-            return (features - mean) / scale
-        maybe = scaler.get("scaler")
-        if maybe and hasattr(maybe, "transform"):
-            return maybe.transform(features)
-
-    # numpy array: try both interpretations
-    if isinstance(scaler, np.ndarray):
-        arr = scaler
-        if arr.ndim == 1 and arr.shape[0] == features.shape[1]:
-            # Try treat as scale (divide)
-            try:
-                scaled = features / arr
-                if np.isfinite(scaled).all() and np.abs(scaled).mean() < 1e6:
-                    print("DEBUG: treated ndarray scaler as scale (dividing).")
-                    return scaled
-            except Exception:
-                pass
-            # Fallback: treat as mean (subtract)
-            try:
-                scaled = features - arr
-                print("DEBUG: treated ndarray scaler as mean (subtracting).")
-                return scaled
-            except Exception:
-                pass
-
-    # Last resort: attempt to build StandardScaler if keys available in some container
-    try:
-        # If scaler is a tuple/list like (mean, scale)
-        if isinstance(scaler, (tuple, list)) and len(scaler) == 2:
-            mean = np.asarray(scaler[0])
-            scale = np.asarray(scaler[1])
-            ss = StandardScaler()
-            ss.mean_ = mean
-            ss.scale_ = scale
-            ss.var_ = ss.scale_ ** 2
-            ss.n_features_in_ = mean.shape[0]
-            return ss.transform(features)
-    except Exception:
-        pass
-
-    print("WARNING: Unrecognized scaler type in visualization; proceeding without scaling.")
-    print(f"  scaler type: {type(scaler)}, repr preview: {repr(scaler)[:300]}")
-    return features
-
-
-
 
 # Try to import MNE for EDF reading (more lenient than pyedflib)
 try:
@@ -84,7 +18,7 @@ except ImportError:
         HAS_PYEDFLIB = False
 
 
-def plot_confusion_matrix(y_true, y_pred, class_names):
+def plot_confusion_matrix(y_true, y_pred, class_names, title="Confusion Matrix"):
     """
     Plots a confusion matrix.
 
@@ -92,23 +26,27 @@ def plot_confusion_matrix(y_true, y_pred, class_names):
         y_true (np.ndarray): The true labels.
         y_pred (np.ndarray): The predicted labels.
         class_names (list): The names of the classes.
+        title (str): Title for the confusion matrix plot.
     """
     cm = confusion_matrix(y_true, y_pred)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=class_names)
     disp.plot()
-    plt.title("Confusion Matrix")
+    plt.title(title)
     plt.show()
 
 
 # OBS! THIS ONLY PLOTS THE RAW SIGNALS!
-def plot_sample_epoch(edf_path, epoch_idx=0, epoch_duration=30):
+def plot_sample_epoch(edf_path, epoch_idx=0, epoch_duration=30, channel_types=None):
     """
-    Plot all signals from a sample epoch in an EDF file.
+    Plot signals from a sample epoch in an EDF file.
 
     Args:
         edf_path (str): Path to the EDF file.
         epoch_idx (int): Index of the epoch to plot (default: 0).
         epoch_duration (int): Duration of each epoch in seconds (default: 30).
+        channel_types (list, optional): List of channel types to plot (e.g., ['EEG', 'EOG']).
+                                        If None, plots all channels. If specified, only channels
+                                        containing these strings in their names will be plotted.
     """
     if not HAS_MNE and not HAS_PYEDFLIB:
         print("Error: Neither MNE nor pyedflib is installed.")
@@ -127,6 +65,24 @@ def plot_sample_epoch(edf_path, epoch_idx=0, epoch_duration=30):
             # Use MNE (more lenient with EDF format issues)
             raw = mne.io.read_raw_edf(edf_path, preload=True, stim_channel=None, verbose=False)
 
+            # Filter channels if channel_types is specified
+            if channel_types is not None and len(channel_types) > 0:
+                # Find channels that match any of the specified types
+                all_channels = raw.ch_names
+                filtered_channels = []
+                for ch in all_channels:
+                    ch_upper = ch.upper()
+                    for ch_type in channel_types:
+                        if ch_type.upper() in ch_upper:
+                            filtered_channels.append(ch)
+                            break
+
+                if filtered_channels:
+                    raw = raw.copy().pick_channels(filtered_channels)
+                    print(f"Filtered to {len(filtered_channels)} channels: {filtered_channels}")
+                else:
+                    print(f"Warning: No channels found matching types {channel_types}. Plotting all channels.")
+
             n_channels = len(raw.ch_names)
             channel_labels = raw.ch_names
 
@@ -143,19 +99,50 @@ def plot_sample_epoch(edf_path, epoch_idx=0, epoch_duration=30):
             # Fallback to pyedflib
             with pyedflib.EdfReader(edf_path) as edf:
                 n_channels = edf.signals_in_file
-                channel_labels = edf.getSignalLabels()
+                all_channel_labels = edf.getSignalLabels()
                 sampling_freqs = [edf.getSampleFrequency(i) for i in range(n_channels)]
 
+                # Filter channels if channel_types is specified
+                if channel_types is not None and len(channel_types) > 0:
+                    # Find channels that match any of the specified types
+                    filtered_indices = []
+                    filtered_labels = []
+                    filtered_freqs = []
+                    for ch_idx, ch_label in enumerate(all_channel_labels):
+                        ch_upper = ch_label.upper()
+                        for ch_type in channel_types:
+                            if ch_type.upper() in ch_upper:
+                                filtered_indices.append(ch_idx)
+                                filtered_labels.append(ch_label)
+                                filtered_freqs.append(sampling_freqs[ch_idx])
+                                break
+
+                    if filtered_indices:
+                        channel_indices = filtered_indices
+                        channel_labels = filtered_labels
+                        sampling_freqs = filtered_freqs
+                        print(f"Filtered to {len(filtered_labels)} channels: {filtered_labels}")
+                    else:
+                        print(f"Warning: No channels found matching types {channel_types}. Plotting all channels.")
+                        channel_indices = list(range(n_channels))
+                        channel_labels = all_channel_labels
+                else:
+                    channel_indices = list(range(n_channels))
+                    channel_labels = all_channel_labels
+
                 data_all = []
-                for ch_idx in range(n_channels):
-                    fs = sampling_freqs[ch_idx]
+                for i, ch_idx in enumerate(channel_indices):
+                    # sampling_freqs is already filtered if channel_types was specified
+                    fs = sampling_freqs[i]
                     start_sample = int(start_time * fs)
                     n_samples = int(epoch_duration * fs)
                     signal = edf.readSignal(ch_idx, start=start_sample, n=n_samples)
                     data_all.append(signal)
 
+                n_channels = len(channel_labels)
+
                 # Create time axis
-                max_samples = max(len(d) for d in data_all)
+                max_samples = max(len(d) for d in data_all) if data_all else 0
                 times = np.linspace(start_time, start_time + epoch_duration, max_samples)
 
         # Create subplots - EXACTLY like the diagnostic plot that worked
@@ -227,100 +214,133 @@ def plot_sample_epoch(edf_path, epoch_idx=0, epoch_duration=30):
 
 def plot_preprocessed_epoch(preprocessed_data, epoch_idx=0, epoch_duration=30, channel_info=None):
     """
-    Plot all signals from a preprocessed epoch.
+    Plot all signals from a preprocessed epoch (EEG and EOG if available).
     Works exactly like plot_sample_epoch but uses preprocessed data instead of raw EDF file.
 
     Args:
-        preprocessed_data (dict): Dictionary with 'eeg' key containing preprocessed data.
-            Shape: {'eeg': np.ndarray with shape (n_epochs, n_channels, n_samples_per_epoch)}
+        preprocessed_data (dict): Dictionary with 'eeg' key (and optionally 'eog' key).
+            Shape: {'eeg': np.ndarray with shape (n_epochs, n_channels, n_samples_per_epoch),
+                    'eog': np.ndarray with shape (n_epochs, n_channels, n_samples_per_epoch)}
         epoch_idx (int): Index of the epoch to plot (default: 0).
         epoch_duration (int): Duration of each epoch in seconds (default: 30).
         channel_info (dict, optional): Dictionary with channel information.
-            Should contain 'eeg_fs' (sampling frequency) and optionally 'eeg_names' (channel names).
+            Should contain 'eeg_fs', 'eog_fs' (sampling frequencies) and optionally 'eeg_names', 'eog_names'.
     """
     try:
         # Reset matplotlib to defaults
         import matplotlib
         matplotlib.rcdefaults()
 
-        # Get preprocessed EEG data
-        if 'eeg' not in preprocessed_data:
-            print("Error: preprocessed_data must contain 'eeg' key")
+        # Collect all channels to plot (EEG + EOG)
+        all_epoch_data = []
+        all_channel_labels = []
+        all_fs = []
+
+        # Process EEG channels
+        if 'eeg' in preprocessed_data:
+            eeg_data = preprocessed_data['eeg']  # Shape: (n_epochs, n_channels, n_samples_per_epoch)
+
+            # Validate epoch index
+            if epoch_idx >= eeg_data.shape[0]:
+                print(f"Error: epoch_idx {epoch_idx} is out of range. Data has {eeg_data.shape[0]} epochs.")
+                return
+
+            # Get sampling frequency
+            if channel_info is not None and 'eeg_fs' in channel_info:
+                eeg_fs = channel_info['eeg_fs']
+            else:
+                eeg_fs = eeg_data.shape[2] / epoch_duration
+
+            # Get channel names
+            n_eeg_channels = eeg_data.shape[1]
+            if channel_info is not None and 'eeg_names' in channel_info:
+                eeg_labels = channel_info['eeg_names'][:n_eeg_channels]
+            else:
+                eeg_labels = [f'EEG_{i + 1}' for i in range(n_eeg_channels)]
+
+            # Extract EEG data for this epoch
+            eeg_epoch = eeg_data[epoch_idx, :, :]  # Shape: (n_channels, n_samples_per_epoch)
+            all_epoch_data.append(eeg_epoch)
+            all_channel_labels.extend(eeg_labels)
+            all_fs.append(eeg_fs)
+
+        # Process EOG channels (if available)
+        if 'eog' in preprocessed_data:
+            eog_data = preprocessed_data['eog']
+
+            # Get sampling frequency
+            if channel_info is not None and 'eog_fs' in channel_info:
+                eog_fs = channel_info['eog_fs']
+            else:
+                eog_fs = eog_data.shape[2] / epoch_duration
+
+            # Get channel names
+            n_eog_channels = eog_data.shape[1]
+            if channel_info is not None and 'eog_names' in channel_info:
+                eog_labels = channel_info['eog_names'][:n_eog_channels]
+            else:
+                eog_labels = [f'EOG_{i + 1}' for i in range(n_eog_channels)]
+
+            # Extract EOG data for this epoch
+            eog_epoch = eog_data[epoch_idx, :, :]  # Shape: (n_channels, n_samples_per_epoch)
+            all_epoch_data.append(eog_epoch)
+            all_channel_labels.extend(eog_labels)
+            all_fs.append(eog_fs)
+
+        # Check if we have any data
+        if not all_epoch_data:
+            print("Error: preprocessed_data must contain at least 'eeg' or 'eog' key")
             return
 
-        eeg_data = preprocessed_data['eeg']  # Shape: (n_epochs, n_channels, n_samples_per_epoch)
-
-        # Validate epoch index
-        if epoch_idx >= eeg_data.shape[0]:
-            print(f"Error: epoch_idx {epoch_idx} is out of range. Data has {eeg_data.shape[0]} epochs.")
-            return
-
-        # Get sampling frequency from channel_info or infer from data
-        if channel_info is not None and 'eeg_fs' in channel_info:
-            fs = channel_info['eeg_fs']
-        else:
-            # Infer from data: samples_per_epoch / epoch_duration
-            samples_per_epoch = eeg_data.shape[2]
-            fs = samples_per_epoch / epoch_duration
-
-        # Get channel names from channel_info or use defaults
-        n_channels = eeg_data.shape[1]
-        if channel_info is not None and 'eeg_names' in channel_info:
-            channel_labels = channel_info['eeg_names']
-            # Ensure we have enough channel names
-            if len(channel_labels) < n_channels:
-                channel_labels = channel_labels + [f'EEG_{i + 1}' for i in range(len(channel_labels), n_channels)]
-            channel_labels = channel_labels[:n_channels]
-        else:
-            channel_labels = [f'EEG_{i + 1}' for i in range(n_channels)]
-
-        # Extract data for this epoch
-        epoch_data = eeg_data[epoch_idx, :, :]  # Shape: (n_channels, n_samples_per_epoch)
-
-        # Create time axis
+        # Calculate total channels and create subplots
+        total_channels = sum(data.shape[0] for data in all_epoch_data)
         start_time = epoch_idx * epoch_duration
-        n_samples = epoch_data.shape[1]
-        times = np.arange(n_samples) / fs + start_time
 
-        # Create subplots - EXACTLY like plot_sample_epoch
-        fig, axes = plt.subplots(n_channels, 1, figsize=(14, 2 * n_channels),
+        # Create subplots
+        fig, axes = plt.subplots(total_channels, 1, figsize=(14, 2 * total_channels),
                                  facecolor='white', edgecolor='black')
-        if n_channels == 1:
+        if total_channels == 1:
             axes = [axes]
 
         print(f"\nPlotting Preprocessed Epoch {epoch_idx} (Time: {start_time}-{start_time + epoch_duration}s)")
         print("=" * 70)
 
-        for ch_idx in range(n_channels):
-            label = channel_labels[ch_idx]
-            signal = epoch_data[ch_idx, :]  # Extract signal for this channel
+        # Plot all channels
+        plot_idx = 0
+        for epoch_data, fs in zip(all_epoch_data, all_fs):
+            n_channels_in_data = epoch_data.shape[0]
+            for ch_idx in range(n_channels_in_data):
+                label = all_channel_labels[plot_idx]
+                signal = epoch_data[ch_idx, :]
 
-            # Set white background for subplot - EXACTLY like plot_sample_epoch
-            axes[ch_idx].set_facecolor('white')
+                # Create time axis for this signal (handle different sampling rates)
+                signal_times = np.arange(len(signal)) / fs + start_time
 
-            # Plot with VERY visible settings - EXACTLY like plot_sample_epoch
-            axes[ch_idx].plot(times, signal, 'r-', linewidth=2.0, solid_capstyle='round', label='Preprocessed')
+                # Plot signal
+                axes[plot_idx].plot(signal_times, signal, 'r-', linewidth=2.0, solid_capstyle='round')
+                axes[plot_idx].set_facecolor('white')
 
-            # Add unit to ylabel for bio-signal channels
-            if 'EEG' in label.upper() or 'EOG' in label.upper() or 'EMG' in label.upper() or 'ECG' in label.upper():
-                ylabel = f'{label} (µV)'
-            else:
-                ylabel = f'{label}'
+                # Add unit to ylabel
+                if 'EEG' in label.upper() or 'EOG' in label.upper() or 'EMG' in label.upper() or 'ECG' in label.upper():
+                    ylabel = f'{label} (µV)'
+                else:
+                    ylabel = f'{label}'
 
-            axes[ch_idx].set_ylabel(ylabel, fontsize=11, fontweight='bold')
-            axes[ch_idx].grid(True, color='gray', alpha=0.4, linestyle='-', linewidth=0.5)
-            axes[ch_idx].set_xlim(times[0], times[-1])
+                axes[plot_idx].set_ylabel(ylabel, fontsize=11, fontweight='bold')
+                axes[plot_idx].grid(True, color='gray', alpha=0.4, linestyle='-', linewidth=0.5)
+                axes[plot_idx].set_xlim(signal_times[0], signal_times[-1])
 
-            # Explicit y-limits - EXACTLY like plot_sample_epoch
-            y_margin = (signal.max() - signal.min()) * 0.15
-            axes[ch_idx].set_ylim(signal.min() - y_margin, signal.max() + y_margin)
+                # Set y-limits
+                y_margin = (signal.max() - signal.min()) * 0.15
+                axes[plot_idx].set_ylim(signal.min() - y_margin, signal.max() + y_margin)
 
-            # Add text showing we have data - EXACTLY like plot_sample_epoch
-            axes[ch_idx].text(0.98, 0.95, f'n={len(signal)}', transform=axes[ch_idx].transAxes,
-                              ha='right', va='top', fontsize=8,
-                              bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.7))
+                # Add sample count text
+                axes[plot_idx].text(0.98, 0.95, f'n={len(signal)}', transform=axes[plot_idx].transAxes,
+                                    ha='right', va='top', fontsize=8,
+                                    bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.7))
 
-            print(f"  {label}: {len(signal)} samples, range=[{signal.min():.1f}, {signal.max():.1f}]")
+                print(f"  {label}: {len(signal)} samples, range=[{signal.min():.1f}, {signal.max():.1f}]")
+                plot_idx += 1
 
         axes[-1].set_xlabel('Time (seconds)', fontsize=12, fontweight='bold')
         axes[0].set_title(f'Preprocessed Sleep Signals - Epoch {epoch_idx} ({epoch_duration}s window)',
@@ -328,7 +348,7 @@ def plot_preprocessed_epoch(preprocessed_data, epoch_idx=0, epoch_duration=30, c
 
         plt.tight_layout()
 
-        # Save figure explicitly before showing
+        # Save figure
         output_path = f"preprocessed_epoch{epoch_idx}_signals.png"
         plt.savefig(output_path, dpi=100, facecolor='white', edgecolor='black', bbox_inches='tight')
         print(f"\n✓ Saved to {output_path}")
@@ -337,7 +357,7 @@ def plot_preprocessed_epoch(preprocessed_data, epoch_idx=0, epoch_duration=30, c
 
     except KeyError as e:
         print(f"Error: Missing key in preprocessed_data - {e}")
-        print("preprocessed_data must be a dict with 'eeg' key")
+        print("preprocessed_data must be a dict with at least 'eeg' key")
     except Exception as e:
         print(f"Error plotting preprocessed epoch: {str(e)}")
         import traceback
@@ -477,67 +497,77 @@ def plot_hypnogram(xml_path, edf_path=None):
         import traceback
         traceback.print_exc()
 
-# newly added during ite3
+
 def visualize_results(model, features, labels, config, scaler=None, loso_aggregated=None):
     """
-    Visualize results.
+    Visualizes the results of the classification.
+    For Iteration 2, uses LOSO aggregated results (primary evaluation).
+    For other iterations, uses a train/test split.
 
     Args:
-        model: trained classifier with predict() (and predict_proba optionally).
-        features: ndarray shape (n_samples, n_features).
-        labels: ndarray shape (n_samples,)
-        config: config object
-        scaler: fitted scaler object or other saved scaler representation (optional)
-        loso_aggregated: optional aggregated LOSO results (not required)
+        model (object): The trained model.
+        features (np.ndarray): The input features.
+        labels (np.ndarray): The corresponding labels.
+        config (module): The configuration module.
+        scaler (StandardScaler, optional): Feature scaler (required for Iteration 2 SVM).
+        loso_aggregated (dict, optional): LOSO aggregated results for Iteration 2.
+            Should contain 'test_labels' and 'test_predictions' keys.
     """
     print("Visualizing results...")
+
     class_names = ['Wake', 'N1', 'N2', 'N3', 'REM']
 
-    # Debug introspection of scaler
-    try:
-        print("DEBUG: scaler type:", type(scaler))
-        if isinstance(scaler, np.ndarray):
-            print("DEBUG: scaler ndarray shape:", scaler.shape, "preview:", np.ravel(scaler)[:10])
-        elif isinstance(scaler, dict):
-            print("DEBUG: scaler dict keys:", list(scaler.keys()))
-        elif scaler is None:
-            print("DEBUG: scaler is None")
-        elif hasattr(scaler, "__dict__"):
-            print("DEBUG: scaler attrs:", [k for k in dir(scaler) if not k.startswith('_')][:30])
-    except Exception as e:
-        print("DEBUG: failed to introspect scaler:", e)
+    # For Iteration 2, use LOSO aggregated results (primary evaluation)
+    if config.CURRENT_ITERATION == 2 and loso_aggregated is not None:
+        print("Using LOSO aggregated confusion matrix (primary evaluation for Iteration 2)")
+        y_test = loso_aggregated['test_labels']
+        y_pred = loso_aggregated['test_predictions']
 
-    # SCALE features before inference (robust)
-    features_scaled = _apply_scaler_to_features(features, scaler)
+        print(f"\nLOSO Aggregated Results (all 10 folds combined):")
+        print(f"  Total test samples: {len(y_test)}")
 
-    # Ensure shapes OK
-    if features_scaled.shape[0] != labels.shape[0]:
-        print(f"WARNING: features ({features_scaled.shape[0]}) and labels ({labels.shape[0]}) length mismatch")
+        # Show distribution
+        unique_preds, pred_counts = np.unique(y_pred, return_counts=True)
+        print(f"\nPredicted classes distribution:")
+        for class_idx, count in zip(unique_preds, pred_counts):
+            print(f"  {class_names[class_idx]}: {count} predictions ({count / len(y_pred) * 100:.1f}%)")
 
-    # Predict
-    try:
-        y_pred = model.predict(features_scaled)
-    except Exception as e:
-        print("Error: model.predict failed:", e)
-        import traceback
-        traceback.print_exc()
-        return
+        unique_true, true_counts = np.unique(y_test, return_counts=True)
+        print(f"\nTrue classes distribution:")
+        for class_idx, count in zip(unique_true, true_counts):
+            print(f"  {class_names[class_idx]}: {count} samples ({count / len(y_test) * 100:.1f}%)")
 
-    # Plot confusion matrix
-    plot_confusion_matrix(labels, y_pred, class_names)
+        # Plot LOSO aggregated confusion matrix (PRIMARY evaluation for Iteration 2)
+        plot_confusion_matrix(y_test, y_pred, class_names,
+                              title="Confusion Matrix - LOSO Aggregated (All 10 Folds)")
 
-    # Optionally show basic metrics
-    try:
-        from sklearn.metrics import classification_report
-        print("\nClassification report:")
-        print(classification_report(labels, y_pred, target_names=class_names, zero_division=0))
-    except Exception:
-        pass
+    else:
+        # Iteration 1 and 3+: Use train/test split for visualization
+        print("Using train/test split for visualization (Iteration 1 or LOSO not available)")
 
-    # Optionally, plot additional LOSO aggregated results if provided
-    if loso_aggregated is not None:
+        from sklearn.model_selection import train_test_split
         try:
-            print("\nLOSO aggregated results (summary):")
-            print(loso_aggregated)
-        except Exception:
-            pass
+            X_train, X_test, y_train, y_test = train_test_split(
+                features, labels, test_size=0.2, random_state=42, stratify=labels
+            )
+        except ValueError:
+            X_train, X_test, y_train, y_test = train_test_split(
+                features, labels, test_size=0.2, random_state=42
+            )
+
+        # Scale features if needed (for Iteration 2 without LOSO results)
+        if config.CURRENT_ITERATION == 2:
+            if scaler is None:
+                from sklearn.preprocessing import StandardScaler
+                print("⚠️  Warning: No scaler provided. Creating a new scaler...")
+                scaler = StandardScaler()
+                X_train_scaled = scaler.fit_transform(X_train)
+                X_test_scaled = scaler.transform(X_test)
+            else:
+                X_test_scaled = scaler.transform(X_test)
+            X_test_for_prediction = X_test_scaled
+        else:
+            X_test_for_prediction = X_test
+
+        y_pred = model.predict(X_test_for_prediction)
+        plot_confusion_matrix(y_test, y_pred, class_names)

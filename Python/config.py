@@ -9,9 +9,9 @@ USE_CACHE = False  # Temporarily disabled for testing with real data
 
 # -- File Paths --
 import os
-DATA_DIR = './'
-TRAINING_DIR = f'{DATA_DIR}TrainData'
-HOLDOUT_DIR = f'{DATA_DIR}TestFeature'
+DATA_DIR = '../data/'
+TRAINING_DIR = f'{DATA_DIR}training/'
+HOLDOUT_DIR = f'{DATA_DIR}holdout/'
 SAMPLE_DIR = f'{DATA_DIR}sample/'
 CACHE_DIR = 'cache/'
 
