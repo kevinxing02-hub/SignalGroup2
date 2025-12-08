@@ -1,12 +1,12 @@
 import config
-from src.data_loader_ite2 import load_all_training_data
+from src.data_loader import load_all_training_data
 from src.preprocessing import preprocess
 from src.feature_extraction import extract_features
-from src.feature_selection_ite2 import select_features
+from src.feature_selection import select_features
 from src.classification import train_classifier
-from src.visualization_ite2 import visualize_results
-from src.report_ite2 import generate_report
-from src.utils_ite2 import save_cache, load_cache
+from src.visualization import visualize_results
+from src.report import generate_report
+from src.utils import save_cache, load_cache
 import os
 import sys
 import io
