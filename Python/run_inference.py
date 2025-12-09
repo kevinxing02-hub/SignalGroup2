@@ -155,11 +155,58 @@ def run_inference():
                     f"Feature extraction failed for {record_id}. Got shape: {getattr(features, 'shape', None)}"
                 )
 
-            # ---------------------------------------------------------
+            '''# ---------------------------------------------------------
             # 4. Scale features
             # ---------------------------------------------------------
             if scaler is not None:
                 features_scaled = scaler.transform(features)
+            else:
+                print("⚠️  Warning: No scaler found — using raw features.")
+                features_scaled = features'''
+            # ---------------------------------------------------------
+            # 4. Scale features (apply saved feature selector if available)
+            # ---------------------------------------------------------
+            if scaler is not None:
+                expected = getattr(scaler, "n_features_in_", None)
+                actual = features.shape[1] if hasattr(features, "shape") else None
+                print(f"[DEBUG] features.shape = {getattr(features, 'shape', None)}; scaler expects {expected}")
+
+                # Try to load selector from model_bundle
+                selector_obj = model_bundle.get("feature_selector", None)
+                selected_indices = model_bundle.get("selected_indices", None)
+
+                # If selector object exists, try to transform features
+                if selector_obj is not None:
+                    try:
+                        features_for_scaling = selector_obj.transform(features)
+                        print("✔ Applied saved feature_selector.transform() to features before scaling.")
+                    except Exception as ex:
+                        print(f"❌ Saved feature_selector.transform failed: {ex}")
+                        features_for_scaling = features
+                elif selected_indices is not None:
+                    try:
+                        sel = np.asarray(selected_indices, dtype=int)
+                        features_for_scaling = features[:, sel]
+                        print("✔ Applied saved selected_indices to features before scaling.")
+                    except Exception as ex:
+                        print(f"❌ Applying selected_indices failed: {ex}")
+                        features_for_scaling = features
+                else:
+                    # no selector saved — just use features as-is (but warn)
+                    features_for_scaling = features
+                    if expected is not None and actual is not None and expected != actual:
+                        print("⚠️  Warning: No selector saved and feature count mismatches scaler. Scaler may fail.")
+
+                # Finally, try scaling (if shapes match)
+                try:
+                    if getattr(scaler, "n_features_in_", None) == getattr(features_for_scaling, "shape", (None, None))[1]:
+                        features_scaled = scaler.transform(features_for_scaling)
+                    else:
+                        print("⚠️ scaler input features do not match expected shape after selector. Using unscaled features_for_scaling.")
+                        features_scaled = features_for_scaling
+                except Exception as ex:
+                    print(f"❌ scaler.transform() raised: {ex}. Using unscaled features_for_scaling.")
+                    features_scaled = features_for_scaling
             else:
                 print("⚠️  Warning: No scaler found — using raw features.")
                 features_scaled = features

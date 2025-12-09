@@ -281,15 +281,11 @@ Labels shape:   (10303,)
 
 === Iteration 4: Random Forest + Hyperparameter Tuning + LOSO ===
 
-
---- Hyperparameter tuning (GroupKFold) ---
 Fitting 5 folds for each of 24 candidates, totalling 120 fits
 
 Best parameters from GroupKFold grid search:
 {'rf__max_depth': None, 'rf__min_samples_leaf': 2, 'rf__min_samples_split': 2, 'rf__n_estimators': 200}
 Best macro-F1: 0.431
-
---- Final LOSO evaluation ---
 
 LOSO fold 1: test subject = R1
   Accuracy:  0.655
@@ -342,18 +338,21 @@ LOSO fold 10: test subject = R9
   F1-macro:  0.426
 
 Final LOSO Performance (Iteration 4):
-  Accuracy: 61.6% ± 13.8%
+  Accuracy: 0.616 ± 0.138
   Kappa:    0.425 ± 0.201
   F1-macro: 0.412 ± 0.108
 
 Final Random Forest trained on all data (Iteration 4).
 Trained random_forest classifier
 Data cached to cache/model_iter4.joblib
-Saved trained model & scaler to cache: model_iter4.joblib
+Saved trained model, scaler and selector to cache: model_iter4.joblib
 
 === STEP 6: VISUALIZATION ===
 Visualizing results...
-Using train/test split for visualization
+✓ Saved figure: outputs\visuals_iter4\confusion_visual_raw.png
+✓ Saved figure: outputs\visuals_iter4\confusion_visual_norm.png
+✓ Saved figure: outputs\visuals_iter4\class_dist_visual.png
+Visualization complete. Files saved at: S:\SignalGoupWork\SignalGroup2\outputs\visuals_iter4
 
 === STEP 7: PROCESSING LOG & REPORT GENERATION ===
 

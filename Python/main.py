@@ -12,6 +12,10 @@ import sys
 import io
 import numpy as np
 
+# set default output dir if not defined in config
+if not hasattr(config, 'OUTPUT_DIR'):
+    config.OUTPUT_DIR = 'outputs'
+os.makedirs(config.OUTPUT_DIR, exist_ok=True)
 
 class TeeOutput:
     """Class that writes to both terminal and buffer simultaneously."""
@@ -176,8 +180,17 @@ def main():
             f"({len(labels)} samples) do not match. Clear cache and rerun."
         )
 
-    selected_features = select_features(features, labels, config)
+    '''selected_features = select_features(features, labels, config)
+    print(f"Selected features shape: {selected_features.shape}")'''
+
+
+    # Now select_features returns (selected_features, selector_obj)
+    selected_features, selector_obj = select_features(features, labels, config)
     print(f"Selected features shape: {selected_features.shape}")
+
+    # keep selector_obj available for saving with the model bundle
+    # store it somewhere local so we can save in the model bundle below
+    selected_feature_selector = selector_obj
 
     # Validate feature selection did not change the number of samples
     if selected_features.shape[0] != len(labels):
@@ -200,16 +213,82 @@ def main():
         scaler = None
 
     # Save model & scaler to cache for later inference
-    if model is not None:
+    '''if model is not None:
         model_bundle = {
             "model": model,
             "scaler": scaler
         }
         model_cache_filename = f"model_iter{config.CURRENT_ITERATION}.joblib"
         save_cache(model_bundle, model_cache_filename, config.CACHE_DIR)
-        print(f"Saved trained model & scaler to cache: {model_cache_filename}")
+        print(f"Saved trained model & scaler to cache: {model_cache_filename}")'''
+    '''if model is not None:
+        model_bundle = {
+            "model": model,
+            "scaler": scaler,
+            # persist selector so inference can re-create the same feature order
+            "feature_selector": selected_feature_selector,
+            # also save explicit indices for redundancy
+            "selected_indices": getattr(selected_feature_selector, "indices_", None) or getattr(selected_feature_selector, "indices_", None) or getattr(selected_feature_selector, "indices_", None)
+        }
+        # robust: if IndexSelector stored indices under .indices_ (we used .indices_), but keep both names
+        # ensure selected_indices is an array if possible:
+        if model_bundle.get("selected_indices", None) is None and selected_feature_selector is not None:
+            try:
+                model_bundle["selected_indices"] = selected_feature_selector.get_support(indices=True)
+            except Exception:
+                model_bundle["selected_indices"] = None
 
-    # ============================================================
+        model_cache_filename = f"model_iter{config.CURRENT_ITERATION}.joblib"
+        save_cache(model_bundle, model_cache_filename, config.CACHE_DIR)
+        print(f"Saved trained model, scaler and selector to cache: {model_cache_filename}")'''
+
+    if model is not None:
+        # helper: try multiple attribute names / methods on selector
+        def _get_selector_indices(selector):
+            if selector is None:
+                return None
+            # If selector already exposes get_support(indices=True)
+            try:
+                idx = selector.get_support(indices=True)
+                if idx is not None:
+                    return np.asarray(idx, dtype=int)
+            except Exception:
+                pass
+            # Try common attribute names
+            for attr in ("indices_", "selected_indices", "indices", "support_", "get_support"):
+                if hasattr(selector, attr) and not callable(getattr(selector, attr)):
+                    try:
+                        val = getattr(selector, attr)
+                        if val is None:
+                            continue
+                        arr = np.asarray(val, dtype=int)
+                        return arr
+                    except Exception:
+                        continue
+            # last attempt: if selector has attribute 'get_support' callable that accepts indices=True
+            if hasattr(selector, "get_support") and callable(selector.get_support):
+                try:
+                    val = selector.get_support(indices=True)
+                    return np.asarray(val, dtype=int)
+                except Exception:
+                    pass
+            return None
+
+        sel_indices = _get_selector_indices(selected_feature_selector)
+        # normalize for storage: prefer python list (safer for printing / older picklers)
+        sel_indices_list = None if sel_indices is None else sel_indices.tolist()
+
+        model_bundle = {
+            "model": model,
+            "scaler": scaler,
+            "feature_selector": selected_feature_selector,
+            "selected_indices": sel_indices_list,
+        }
+
+        model_cache_filename = f"model_iter{config.CURRENT_ITERATION}.joblib"
+        save_cache(model_bundle, model_cache_filename, config.CACHE_DIR)
+        print(f"Saved trained model, scaler and selector to cache: {model_cache_filename}")
+    '''# ============================================================
     # STEP 6: VISUALIZATION
     # ============================================================
     print("\n=== STEP 6: VISUALIZATION ===")
@@ -221,6 +300,32 @@ def main():
             config,
             scaler=scaler,      # used in Iteration 2 and 4 (SVM / RF+LOSO)
             loso_aggregated=None
+        )
+    else:
+        print("Skipping visualization - no trained model")'''
+    # ============================================================
+    # STEP 6: VISUALIZATION
+    # ============================================================
+    print("\n=== STEP 6: VISUALIZATION ===")
+    if model is not None:
+        # Create a consistent visuals folder for this iteration and timestamp if desired
+        visuals_dir = os.path.join(config.OUTPUT_DIR if hasattr(config, 'OUTPUT_DIR') else '.', f"visuals_iter{config.CURRENT_ITERATION}")
+        os.makedirs(visuals_dir, exist_ok=True)
+
+        # Optionally store some config pointers for visualization functions (hypnogram)
+        # config.ANNOTATION_XML = '/path/to/annotations.xml'
+        # config.SAMPLE_EDF = '/path/to/sample.edf'
+
+        visualize_results(
+            model,
+            selected_features,
+            labels,
+            config,
+            scaler=scaler,      # used in Iteration 2 and 4 (SVM / RF+LOSO)
+            loso_aggregated=None,
+            output_dir=visuals_dir,
+            cmap='viridis',     # << changeable: e.g. 'plasma', 'coolwarm'
+            save_all=True
         )
     else:
         print("Skipping visualization - no trained model")

@@ -1,23 +1,36 @@
-
 import numpy as np
 from sklearn.feature_selection import VarianceThreshold, mutual_info_classif
 
 """
-Robust feature selection pipeline.
+Robust feature selection pipeline that ALWAYS returns:
+    (selected_features, selector_obj)
 
-Behaviour summary:
-- If CURRENT_ITERATION == 2:
-    - If number of features is small (< FEATURE_SELECTION_MIN_FEATURES) → SKIP selection
-    - Else run the 3-stage pipeline (variance → correlation → MI) but with conservative thresholds.
-- For later iterations (>=3) the full pipeline is applied.
-
-Config accepted attributes (with defaults used if missing):
-- FEATURE_SELECTION_ENABLED (bool)          : global switch (default True)
-- FEATURE_SELECTION_MIN_FEATURES (int)      : min features to trigger selection in iter2 (default 100)
-- FEATURE_SELECTION_TOP_K (int)             : final number of features to keep via MI (default 40)
-- VARIANCE_THRESHOLD_RATIO (float)          : ratio * max_variance used for dynamic threshold (default 1e-4)
-- CORRELATION_THRESHOLD (float)             : remove one of pair if |r| > threshold (default 0.95)
+selector_obj implements:
+    - transform(X) -> X[:, selected_indices]
+    - get_support(indices=True/False)
+    - _set_original_n_features(n)  (internal helper)
 """
+
+class IndexSelector:
+    def __init__(self, indices):
+        self.indices_ = np.asarray(indices, dtype=int)
+
+    def transform(self, X):
+        X = np.asarray(X)
+        if X.ndim != 2:
+            raise ValueError("IndexSelector.transform expects 2D array")
+        return X[:, self.indices_]
+
+    def get_support(self, indices=True):
+        if indices:
+            return self.indices_.copy()
+        mask = np.zeros(getattr(self, "_original_n_features", self.indices_.max() + 1), dtype=bool)
+        mask[self.indices_] = True
+        return mask
+
+    def _set_original_n_features(self, n):
+        self._original_n_features = int(n)
+
 
 def select_features(features: np.ndarray, labels: np.ndarray, config):
     print(f"\n=== Feature Selection Pipeline (Iteration {config.CURRENT_ITERATION}) ===")
@@ -26,8 +39,11 @@ def select_features(features: np.ndarray, labels: np.ndarray, config):
 
     # Basic input sanity
     if n_features == 0:
-        print("No features available — returning empty array")
-        return features
+        print("No features available — returning empty array and identity selector")
+        sel = IndexSelector(np.arange(0))
+        sel._set_original_n_features(n_features)
+        return features, sel
+
     if labels is None or len(labels) != n_samples:
         raise ValueError("Labels must be provided and match number of feature rows")
 
@@ -35,31 +51,33 @@ def select_features(features: np.ndarray, labels: np.ndarray, config):
     enabled = getattr(config, "FEATURE_SELECTION_ENABLED", True)
     min_features_iter2 = getattr(config, "FEATURE_SELECTION_MIN_FEATURES", 100)
     top_k = getattr(config, "FEATURE_SELECTION_TOP_K", 40)
-    var_ratio = getattr(config, "VARIANCE_THRESHOLD_RATIO", 1e-4)  # very conservative
+    var_ratio = getattr(config, "VARIANCE_THRESHOLD_RATIO", 1e-4)
     corr_thresh = getattr(config, "CORRELATION_THRESHOLD", 0.95)
 
     if not enabled:
-        print("Feature selection disabled by config. Returning original features.")
-        return features
+        print("Feature selection disabled by config. Returning original features and identity selector.")
+        sel = IndexSelector(np.arange(n_features))
+        sel._set_original_n_features(n_features)
+        return features, sel
 
-    # Iteration 2: be conservative. Skip selection if feature count is small.
+    # Iteration 2: conservative skip
     if config.CURRENT_ITERATION == 2 and n_features < min_features_iter2:
         print(f"Iteration 2 and features < {min_features_iter2} → skipping feature selection.")
-        return features
+        sel = IndexSelector(np.arange(n_features))
+        sel._set_original_n_features(n_features)
+        return features, sel
 
-    # ---------- Stage 1: Variance Thresholding (conservative) ----------
+    # ---------- Stage 1: Variance Thresholding ----------
     print("\n[Stage 1] Variance Thresholding (conservative)...")
     variances = np.var(features, axis=0)
     max_var = np.max(variances)
-    # dynamic threshold: small fraction of max variance, but not zero
     threshold = max(max_var * var_ratio, 1e-12)
     vt = VarianceThreshold(threshold=threshold)
     try:
         features_stage1 = vt.fit_transform(features)
         idx_stage1 = vt.get_support(indices=True)
-    except ValueError as e:
-        # In case VarianceThreshold fails (e.g., numerical issues), skip this step
-        print(f"  VarianceThreshold raised {type(e).__name__}: {e}. Skipping stage 1.")
+    except Exception as e:
+        print(f"  VarianceThreshold error {type(e).__name__}: {e}. Skipping stage1.")
         features_stage1 = features.copy()
         idx_stage1 = np.arange(n_features)
 
@@ -72,19 +90,17 @@ def select_features(features: np.ndarray, labels: np.ndarray, config):
         features_stage1 = features.copy()
         idx_stage1 = np.arange(n_features)
 
-    # ---------- Stage 2: Correlation-based pruning (keep highest-variance in groups) ----------
+    # ---------- Stage 2: Correlation pruning ----------
     print("\n[Stage 2] Correlation Filtering (group-wise, keep highest-variance)...")
     if features_stage1.shape[1] == 1:
         print("Only one feature left after stage1 → skipping correlation filtering.")
         features_stage2 = features_stage1
         idx_stage2 = idx_stage1
     else:
-        # compute correlation matrix
         corr = np.corrcoef(features_stage1, rowvar=False)
         abs_corr = np.abs(corr)
         n_f = abs_corr.shape[0]
 
-        # sort features by variance (descending) so we keep the most "informative" of correlated sets
         var_stage1 = variances[idx_stage1]
         sorted_idx = np.argsort(var_stage1)[::-1]  # indices into idx_stage1
 
@@ -93,11 +109,8 @@ def select_features(features: np.ndarray, labels: np.ndarray, config):
         for ii in sorted_idx:
             if not keep_mask[ii]:
                 continue
-            # zero out features highly correlated with ii
             correlated = (abs_corr[ii] > corr_thresh)
-            # don't remove itself
             correlated[ii] = False
-            # remove those correlated features
             keep_mask[correlated] = False
 
         features_stage2 = features_stage1[:, keep_mask]
@@ -109,20 +122,25 @@ def select_features(features: np.ndarray, labels: np.ndarray, config):
 
     # ---------- Stage 3: Mutual Information Top-K ----------
     print("\n[Stage 3] Mutual Information Ranking...")
-    # If features are already <= k, skip MI selection
     if features_stage2.shape[1] <= top_k:
         print(f"  Feature count ({features_stage2.shape[1]}) ≤ top_k ({top_k}) → skipping MI selection.")
-        return features_stage2
+        final_indices = idx_stage2
+    else:
+        try:
+            mi_scores = mutual_info_classif(features_stage2, labels, discrete_features=False)
+            top_indices_local = np.argsort(mi_scores)[::-1][:top_k]  # indices into features_stage2
+            final_indices = idx_stage2[top_indices_local]  # map back to original indices
+            print(f"  Selected top-{top_k} features via mutual information.")
+            print(f"  Final feature count: {len(final_indices)}")
+        except Exception as e:
+            print(f"  mutual_info_classif failed with {type(e).__name__}: {e}. Using stage2 features.")
+            final_indices = idx_stage2
 
-    # Compute mutual information scores robustly
-    try:
-        mi_scores = mutual_info_classif(features_stage2, labels, discrete_features=False)
-        # sort descending and pick top_k
-        top_indices = np.argsort(mi_scores)[::-1][:top_k]
-        features_stage3 = features_stage2[:, top_indices]
-        print(f"  Selected top-{top_k} features via mutual information.")
-        print(f"  Final feature count: {features_stage3.shape[1]}")
-        return features_stage3
-    except Exception as e:
-        print(f"  mutual_info_classif failed with {type(e).__name__}: {e}. Returning stage2 features.")
-        return features_stage2
+    # Build final selected matrix and selector
+    final_indices = np.asarray(final_indices, dtype=int)
+    selected_features = features[:, final_indices]
+
+    selector = IndexSelector(final_indices)
+    selector._set_original_n_features(n_features)
+
+    return selected_features, selector
