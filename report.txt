@@ -259,23 +259,24 @@ Extracted features shape: (10303, 105)
 Initial feature count: 105
 
 [Stage 1] Variance Thresholding (conservative)...
-  Removed 89 low-variance features
-  Remaining after stage1: 16
+  Removed 12 low-variance features
+  Remaining after stage1: 93
 
 [Stage 2] Correlation Filtering (group-wise, keep highest-variance)...
-  Removed 2 correlated features (|r| > 0.95)
-  Remaining after stage2: 14
+  Removed 25 correlated features (|r| > 0.95)
+  Remaining after stage2: 68
 
 [Stage 3] Mutual Information Ranking...
-  Feature count (14) ≤ top_k (40) → skipping MI selection.
-Selected features shape: (10303, 14)
+  Selected top-40 features via mutual information.
+  Final feature count: 40
+Selected features shape: (10303, 40)
 
 === STEP 5: CLASSIFICATION ===
 
 ====================================================
  Training Classifier (Iteration 4)
 ====================================================
-Features shape: (10303, 14)
+Features shape: (10303, 40)
 Labels shape:   (10303,)
 
 
@@ -284,63 +285,63 @@ Labels shape:   (10303,)
 Fitting 5 folds for each of 24 candidates, totalling 120 fits
 
 Best parameters from GroupKFold grid search:
-{'rf__max_depth': None, 'rf__min_samples_leaf': 2, 'rf__min_samples_split': 2, 'rf__n_estimators': 200}
-Best macro-F1: 0.431
+{'rf__max_depth': 10, 'rf__min_samples_leaf': 2, 'rf__min_samples_split': 5, 'rf__n_estimators': 100}
+Best macro-F1: 0.602
 
 LOSO fold 1: test subject = R1
-  Accuracy:  0.655
-  Kappa:     0.469
-  F1-macro:  0.456
+  Accuracy:  0.709
+  Kappa:     0.596
+  F1-macro:  0.608
 
 LOSO fold 2: test subject = R10
-  Accuracy:  0.441
-  Kappa:     0.199
-  F1-macro:  0.294
+  Accuracy:  0.756
+  Kappa:     0.664
+  F1-macro:  0.641
 
 LOSO fold 3: test subject = R2
-  Accuracy:  0.822
-  Kappa:     0.626
-  F1-macro:  0.355
+  Accuracy:  0.804
+  Kappa:     0.644
+  F1-macro:  0.550
 
 LOSO fold 4: test subject = R3
-  Accuracy:  0.768
-  Kappa:     0.675
-  F1-macro:  0.578
+  Accuracy:  0.794
+  Kappa:     0.724
+  F1-macro:  0.683
 
 LOSO fold 5: test subject = R4
-  Accuracy:  0.682
-  Kappa:     0.557
-  F1-macro:  0.449
+  Accuracy:  0.741
+  Kappa:     0.658
+  F1-macro:  0.668
 
 LOSO fold 6: test subject = R5
-  Accuracy:  0.741
-  Kappa:     0.607
-  F1-macro:  0.546
+  Accuracy:  0.772
+  Kappa:     0.672
+  F1-macro:  0.630
 
 LOSO fold 7: test subject = R6
-  Accuracy:  0.582
-  Kappa:     0.388
-  F1-macro:  0.426
+  Accuracy:  0.718
+  Kappa:     0.567
+  F1-macro:  0.542
 
 LOSO fold 8: test subject = R7
-  Accuracy:  0.365
-  Kappa:     -0.008
-  F1-macro:  0.187
+  Accuracy:  0.589
+  Kappa:     0.369
+  F1-macro:  0.476
 
 LOSO fold 9: test subject = R8
-  Accuracy:  0.532
-  Kappa:     0.327
-  F1-macro:  0.408
+  Accuracy:  0.780
+  Kappa:     0.689
+  F1-macro:  0.622
 
 LOSO fold 10: test subject = R9
-  Accuracy:  0.574
-  Kappa:     0.412
-  F1-macro:  0.426
+  Accuracy:  0.592
+  Kappa:     0.454
+  F1-macro:  0.530
 
 Final LOSO Performance (Iteration 4):
-  Accuracy: 0.616 ± 0.138
-  Kappa:    0.425 ± 0.201
-  F1-macro: 0.412 ± 0.108
+  Accuracy: 0.726 ± 0.074
+  Kappa:    0.604 ± 0.106
+  F1-macro: 0.595 ± 0.064
 
 Final Random Forest trained on all data (Iteration 4).
 Trained random_forest classifier
@@ -348,10 +349,14 @@ Data cached to cache/model_iter4.joblib
 Saved trained model, scaler and selector to cache: model_iter4.joblib
 
 === STEP 6: VISUALIZATION ===
-Visualizing results...
-✓ Saved figure: outputs\visuals_iter4\confusion_visual_raw.png
-✓ Saved figure: outputs\visuals_iter4\confusion_visual_norm.png
-✓ Saved figure: outputs\visuals_iter4\class_dist_visual.png
+Visualizing results... (debug mode)
+DEBUG: Using loso_aggregated provided by training.
+DEBUG: loso_aggregated[test_labels] -> dtype=int64, shape=(10303,), preview=[0, 0, 0, 0, 0, 0, 0, 0]
+DEBUG: loso_aggregated[test_predictions] -> dtype=int64, shape=(10303,), preview=[0, 0, 0, 0, 0, 0, 0, 0]
+  Total loso aggregated test samples: 10303
+✓ Saved figure: outputs\visuals_iter4\confusion_loso_raw.png
+✓ Saved figure: outputs\visuals_iter4\confusion_loso_norm.png
+✓ Saved figure: outputs\visuals_iter4\class_dist_loso.png
 Visualization complete. Files saved at: S:\SignalGoupWork\SignalGroup2\outputs\visuals_iter4
 
 === STEP 7: PROCESSING LOG & REPORT GENERATION ===
@@ -364,23 +369,23 @@ Visualization complete. Files saved at: S:\SignalGoupWork\SignalGroup2\outputs\v
 RandomForestClassifier
 
 ## Performance Metrics (20% Test Split)
-Accuracy: 0.338
-Kappa: 0.000
-Macro F1-score: 0.101
-Weighted F1-score: 0.171
+Accuracy: 0.884
+Kappa: 0.840
+Macro F1-score: 0.836
+Weighted F1-score: 0.888
 
 
 Confusion Matrix:
-      Wake  N1  N2  N3  REM
-Wake   697   0   0   0    0
-N1      55   0   0   0    0
-N2     762   0   0   0    0
-N3     324   0   0   0    0
-REM    223   0   0   0    0
+      Wake  N1   N2   N3  REM
+Wake   613  28   42    1   13
+N1       3  50    2    0    0
+N2      10  24  662   43   23
+N3       0   0   22  302    0
+REM      1   4   22    1  195
 
 ## Features
 ### Feature Count
-- Total features: 14
+- Total features: 40
 
 Note: Feature details for Iteration 4 may include multi-signal features (EEG+EOG+EMG).
 

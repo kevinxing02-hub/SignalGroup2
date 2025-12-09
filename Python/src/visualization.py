@@ -134,7 +134,7 @@ def plot_hypnogram(xml_path, edf_path=None, stage_colors=None,
     # For brevity, reuse your XML parsing and plotting body but ensure colors from stage_colors are used
     raise NotImplementedError("Paste original plot_hypnogram body and ensure stage_colors usage + save")
 
-
+'''
 def visualize_results(model, features, labels, config, scaler=None, loso_aggregated=None,
                       output_dir='visualizations', cmap='Blues', save_all=True,
                       class_names=None):
@@ -228,6 +228,165 @@ def visualize_results(model, features, labels, config, scaler=None, loso_aggrega
     if xml_path and os.path.exists(xml_path):
         try:
             # prefer user-specified colors if present
+            stage_colors = getattr(config, 'HYPNOGRAM_COLORS', None)
+            plot_hypnogram(xml_path, edf_path=getattr(config, 'SAMPLE_EDF', None),
+                           stage_colors=stage_colors,
+                           output_dir=output_dir,
+                           filename='hypnogram.png')
+        except Exception as e:
+            print(f"Warning: Could not plot hypnogram: {e}")
+
+    print("Visualization complete. Files saved at:", os.path.abspath(output_dir))
+'''
+def visualize_results(model, features, labels, config, scaler=None, loso_aggregated=None,
+                      output_dir='visualizations', cmap='Blues', save_all=True,
+                      class_names=None):
+    """
+    Debug-friendly visualize_results.
+    Prints what data is used for confusion matrix (LOSO aggregated vs fallback split vs full),
+    shapes and small previews, then proceeds to plotting as before.
+    """
+    import numpy as _np
+    from sklearn.model_selection import train_test_split
+
+    print("Visualizing results... (debug mode)")
+    if class_names is None:
+        class_names = ['Wake', 'N1', 'N2', 'N3', 'REM']
+
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Helper to flatten + debug print small preview
+    def _flatten_and_report(arr, name):
+        if arr is None:
+            print(f"DEBUG: {name} is None")
+            return None
+        a = _np.asarray(arr)
+        a = a.ravel()
+        preview = a[:8].tolist() if a.size > 0 else []
+        print(f"DEBUG: {name} -> dtype={a.dtype}, shape={a.shape}, preview={preview}")
+        return a
+
+    # If LOSO aggregated provided and iteration==2, use it
+    #if getattr(config, 'CURRENT_ITERATION', None) == 2 and loso_aggregated is not None:
+    if loso_aggregated is not None:
+
+        print("DEBUG: Using loso_aggregated provided by training.")
+        # defensive extraction
+        y_test = _flatten_and_report(loso_aggregated.get('test_labels'), 'loso_aggregated[test_labels]')
+        y_pred = _flatten_and_report(loso_aggregated.get('test_predictions'), 'loso_aggregated[test_predictions]')
+
+        if y_test is None or y_pred is None:
+            raise ValueError("LOSO aggregated structure missing 'test_labels' or 'test_predictions'")
+
+        # final length check
+        if y_test.shape[0] != y_pred.shape[0]:
+            print("ERROR: loso_aggregated lengths mismatch!")
+            print("  y_test.shape:", y_test.shape)
+            print("  y_pred.shape:", y_pred.shape)
+            raise ValueError("LOSO aggregated shapes do not match (test_labels vs test_predictions).")
+
+        # print totals
+        print(f"  Total loso aggregated test samples: {y_test.shape[0]}")
+
+        # plotting (your original calls)
+        plot_confusion_matrix(y_test, y_pred, class_names,
+                              title="Confusion Matrix - LOSO Aggregated (Raw)",
+                              cmap=cmap,
+                              normalize=False,
+                              output_dir=output_dir,
+                              filename='confusion_loso_raw.png')
+
+        plot_confusion_matrix(y_test, y_pred, class_names,
+                              title="Confusion Matrix - LOSO Aggregated (Normalized)",
+                              cmap=cmap,
+                              normalize=True,
+                              output_dir=output_dir,
+                              filename='confusion_loso_norm.png')
+
+        plot_class_distribution(y_test, y_pred, class_names=class_names,
+                                title="True vs Predicted Class Distribution (LOSO)",
+                                output_dir=output_dir,
+                                filename='class_dist_loso.png',
+                                bar_color='#1f77b4')
+
+    else:
+        # Fallback: do not mutate original features/labels objects
+        print("DEBUG: No loso_aggregated used (either not provided or not Iteration 2).")
+        # decide X used for prediction
+        if scaler is not None and getattr(config, 'CURRENT_ITERATION', None) in (2, 4):
+            try:
+                X = scaler.transform(features)
+                print("DEBUG: Applied scaler.transform to features for visualization.")
+            except Exception as e:
+                print("DEBUG: scaler.transform failed, attempting fallback _apply_scaler_to_features if available:", e)
+                try:
+                    X = _apply_scaler_to_features(features, scaler)
+                    print("DEBUG: _apply_scaler_to_features used successfully.")
+                except Exception:
+                    print("DEBUG: Could not apply scaler; using raw features.")
+                    X = features
+        else:
+            X = features
+
+        # Print shapes of inputs
+        print(f"DEBUG: features.shape = {getattr(features, 'shape', 'unknown')}, labels.shape = {getattr(labels, 'shape', 'unknown')}")
+        # Now the original fallback split behaviour (we leave it but debug-print it)
+        try:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, labels, test_size=0.2, random_state=42, stratify=labels
+            )
+            print("DEBUG: Performed stratified train_test_split(test_size=0.2, random_state=42).")
+        except Exception:
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, labels, test_size=0.2, random_state=42
+            )
+            print("DEBUG: Performed non-stratified train_test_split(test_size=0.2).")
+
+        # flatten & report
+        y_test = _flatten_and_report(y_test, 'y_test (from fallback split)')
+        y_pred = None
+        try:
+            y_pred = _flatten_and_report(model.predict(X_test), 'y_pred (model.predict on X_test)')
+        except Exception as e:
+            print("ERROR: model.predict failed on X_test:", e)
+            import traceback; traceback.print_exc()
+            raise
+
+        # final check
+        if y_test.shape[0] != y_pred.shape[0]:
+            print("ERROR: fallback split y_test and y_pred lengths mismatch!")
+            print("  y_test.shape:", y_test.shape)
+            print("  y_pred.shape:", y_pred.shape)
+            # Attempt to show more context
+            raise ValueError("Mismatch between y_test and y_pred lengths for fallback split.")
+
+        print(f"  Total fallback split test samples: {y_test.shape[0]} (≈20% of dataset if train_test_split succeeded)")
+
+        # plotting (existing calls)
+        plot_confusion_matrix(y_test, y_pred, class_names,
+                              title="Confusion Matrix (Visualization Split)",
+                              cmap=cmap,
+                              normalize=False,
+                              output_dir=output_dir,
+                              filename='confusion_visual_raw.png')
+
+        plot_confusion_matrix(y_test, y_pred, class_names,
+                              title="Confusion Matrix (Visualization Split) - Norm",
+                              cmap=cmap,
+                              normalize=True,
+                              output_dir=output_dir,
+                              filename='confusion_visual_norm.png')
+
+        plot_class_distribution(y_test, y_pred, class_names=class_names,
+                                title="True vs Predicted Class Distribution",
+                                output_dir=output_dir,
+                                filename='class_dist_visual.png',
+                                bar_color='#ff7f0e')
+
+    # Optional: hypnogram (same as before)
+    xml_path = getattr(config, 'ANNOTATION_XML', None)
+    if xml_path and os.path.exists(xml_path):
+        try:
             stage_colors = getattr(config, 'HYPNOGRAM_COLORS', None)
             plot_hypnogram(xml_path, edf_path=getattr(config, 'SAMPLE_EDF', None),
                            stage_colors=stage_colors,

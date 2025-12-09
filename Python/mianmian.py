@@ -7,8 +7,6 @@ from src.classification import train_classifier
 from src.visualization import visualize_results
 from src.report import generate_report
 from src.utils import save_cache, load_cache
-# add this near your other imports
-from visualization_helpers import save_iteration_performance, plot_overall_performance
 
 import os
 import sys
@@ -23,7 +21,7 @@ os.makedirs(config.OUTPUT_DIR, exist_ok=True)
 # utils.py (add)
 import numpy as np
 
-# Subject-level normalization (per-subject z-score of features)
+#Subject-level normalization (per-subject z-score of features)
 # Normalize features within each recording (subject) before pooling for training.
 def subject_zscore(features, record_ids, eps=1e-9):
     """Z-score features per subject (rows match epochs). Returns array same shape as features."""
@@ -205,6 +203,10 @@ def main():
             f"({len(labels)} samples) do not match. Clear cache and rerun."
         )
 
+    '''selected_features = select_features(features, labels, config)
+    print(f"Selected features shape: {selected_features.shape}")'''
+
+
     # Now select_features returns (selected_features, selector_obj)
     selected_features, selector_obj = select_features(features, labels, config)
     print(f"Selected features shape: {selected_features.shape}")
@@ -225,7 +227,7 @@ def main():
     # ============================================================
     print("\n=== STEP 5: CLASSIFICATION ===")
     if selected_features.shape[1] > 0:
-        # model, scaler = train_classifier(selected_features, labels, config)
+        #model, scaler = train_classifier(selected_features, labels, config)
         model, scaler, loso_aggregated = train_classifier(selected_features, labels, config)
 
         print(f"Trained {config.CLASSIFIER_TYPE} classifier")
@@ -234,7 +236,36 @@ def main():
         print("Students must implement feature extraction first.")
         model = None
         scaler = None
-        loso_aggregated = None
+
+    # Save model & scaler to cache for later inference
+    '''if model is not None:
+        model_bundle = {
+            "model": model,
+            "scaler": scaler
+        }
+        model_cache_filename = f"model_iter{config.CURRENT_ITERATION}.joblib"
+        save_cache(model_bundle, model_cache_filename, config.CACHE_DIR)
+        print(f"Saved trained model & scaler to cache: {model_cache_filename}")'''
+    '''if model is not None:
+        model_bundle = {
+            "model": model,
+            "scaler": scaler,
+            # persist selector so inference can re-create the same feature order
+            "feature_selector": selected_feature_selector,
+            # also save explicit indices for redundancy
+            "selected_indices": getattr(selected_feature_selector, "indices_", None) or getattr(selected_feature_selector, "indices_", None) or getattr(selected_feature_selector, "indices_", None)
+        }
+        # robust: if IndexSelector stored indices under .indices_ (we used .indices_), but keep both names
+        # ensure selected_indices is an array if possible:
+        if model_bundle.get("selected_indices", None) is None and selected_feature_selector is not None:
+            try:
+                model_bundle["selected_indices"] = selected_feature_selector.get_support(indices=True)
+            except Exception:
+                model_bundle["selected_indices"] = None
+
+        model_cache_filename = f"model_iter{config.CURRENT_ITERATION}.joblib"
+        save_cache(model_bundle, model_cache_filename, config.CACHE_DIR)
+        print(f"Saved trained model, scaler and selector to cache: {model_cache_filename}")'''
 
     if model is not None:
         # helper: try multiple attribute names / methods on selector
@@ -282,7 +313,21 @@ def main():
         model_cache_filename = f"model_iter{config.CURRENT_ITERATION}.joblib"
         save_cache(model_bundle, model_cache_filename, config.CACHE_DIR)
         print(f"Saved trained model, scaler and selector to cache: {model_cache_filename}")
-
+    '''# ============================================================
+    # STEP 6: VISUALIZATION
+    # ============================================================
+    print("\n=== STEP 6: VISUALIZATION ===")
+    if model is not None:
+        visualize_results(
+            model,
+            selected_features,
+            labels,
+            config,
+            scaler=scaler,      # used in Iteration 2 and 4 (SVM / RF+LOSO)
+            loso_aggregated=None
+        )
+    else:
+        print("Skipping visualization - no trained model")'''
     # ============================================================
     # STEP 6: VISUALIZATION
     # ============================================================
@@ -307,11 +352,23 @@ def main():
             cmap='viridis',
             save_all=True
         )
+
+        '''
+        visualize_results(
+            model,
+            selected_features,
+            labels,
+            config,
+            scaler=scaler,      # used in Iteration 2 and 4 (SVM / RF+LOSO)
+            loso_aggregated=None,
+            output_dir=visuals_dir,
+            cmap='viridis',     # << changeable: e.g. 'plasma', 'coolwarm'
+            save_all=True
+        )
+        '''
     else:
-        # still ensure visuals_dir exists for STEP 888 if no model
-        visuals_dir = os.path.join(config.OUTPUT_DIR if hasattr(config, 'OUTPUT_DIR') else '.', f"visuals_iter{config.CURRENT_ITERATION}")
-        os.makedirs(visuals_dir, exist_ok=True)
-        print("Skipping visualize_results - no trained model")
+        print("Skipping visualization - no trained model")
+
 
     # ============================================================
     # STEP 7: REPORT GENERATION
@@ -334,49 +391,6 @@ def main():
     if model is None:
         print("WARNING: Students need to implement missing components.")
     print("=" * 50)
-
-    # ============================================================
-    # STEP 888: SAVE PER-ITERATION METRICS & PLOT OVERALL
-    # ============================================================
-    # ensure visuals_dir exists (already created above but keep safe)
-    visuals_dir = os.path.join(config.OUTPUT_DIR if hasattr(config, 'OUTPUT_DIR') else '.', f"visuals_iter{config.CURRENT_ITERATION}")
-    os.makedirs(visuals_dir, exist_ok=True)
-
-    cluster_name = getattr(config, 'PICTURE_CLUSTER_NAME', None) or 'default'
-
-    try:
-        # Save per-iteration metrics (this function will try to compute LOSO if missing)
-        save_iteration_performance(
-            config=config,
-            iteration=config.CURRENT_ITERATION,
-            model=model,
-            scaler=scaler,
-            features=selected_features,
-            labels=labels,
-            loso_aggregated=loso_aggregated,
-            output_dir=visuals_dir,
-            cluster_name=cluster_name
-        )
-        print("Performance recorded for this iteration.")
-    except Exception as e:
-        # do not crash the pipeline if saving fails
-        print(f"WARNING: Failed to save iteration performance: {e}")
-
-    # generate aggregated plot for the current visuals folder (avoids recursive-search issues)
-    try:
-        overall_path = plot_overall_performance(
-            output_dir=visuals_dir,       # point directly at folder containing the JSON(s)
-            cluster_name=cluster_name,
-            save_png=True,
-            show_fig=False
-        )
-        print(f"Overall performance plot generated: {overall_path}")
-    except FileNotFoundError:
-        # No files yet (e.g. first run) — not an error
-        print("No overall performance files found to plot (this is normal on the first run).")
-    except Exception as e:
-        print(f"WARNING: Failed to generate overall performance plot: {e}")
-
 
 if __name__ == "__main__":
     main()

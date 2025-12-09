@@ -35,14 +35,17 @@ except Exception:
         pass
     def record_training_checkpoint(*args, **kwargs):
         pass
-
-
 def train_classifier(features, labels, config, val_data=None):
     """
     Universal training function for all iterations.
 
     val_data: optional tuple (X_val, y_val) used for checkpointing when enabled via config.
-    Returns: model, scaler
+    Returns: model, scaler, loso_aggregated
+      - loso_aggregated is None for iterations that don't produce LOSO sample-level outputs.
+      - For Iteration 4 it will be a dict with keys:
+          'test_labels' : np.ndarray (concatenated y_test from each fold)
+          'test_predictions' : np.ndarray (concatenated y_pred from each fold)
+          'per_fold' : list of dicts with per-fold metrics
     """
     print(f"\n====================================================")
     print(f" Training Classifier (Iteration {config.CURRENT_ITERATION})")
@@ -53,8 +56,9 @@ def train_classifier(features, labels, config, val_data=None):
     if features.shape[1] == 0:
         raise ValueError("ERROR: No features provided!")
 
-    # Default when no scaler is used (e.g. iterations 1 and 3)
+    # Default when no scaler is used
     scaler = None
+    loso_aggregated = None  # default: only filled for iterations that collect LOSO
 
     # -------------------------
     # ITERATION 1 — k-NN + SMOTE
@@ -105,7 +109,7 @@ def train_classifier(features, labels, config, val_data=None):
         except Exception:
             print("ROC-AUC not available for k-NN or failed to compute.")
 
-        return model, scaler
+        return model, scaler, loso_aggregated
 
     # -------------------------
     # ITERATION 2 — SVM + LOSO
@@ -170,7 +174,7 @@ def train_classifier(features, labels, config, val_data=None):
         )
         model.fit(X_scaled_all, labels)
         print("\nFinal SVM trained on all data.")
-        return model, scaler
+        return model, scaler, loso_aggregated
 
     # -------------------------
     # ITERATION 3 — RF basic
@@ -190,7 +194,7 @@ def train_classifier(features, labels, config, val_data=None):
 
         model.fit(features, labels)
         print("Random Forest trained (Iteration 3).")
-        return model, scaler
+        return model, scaler, loso_aggregated
 
     # -------------------------
     # ITERATION 4 — RF + Group-tuning + LOSO
@@ -230,10 +234,15 @@ def train_classifier(features, labels, config, val_data=None):
         # Extract RF parameters
         best_rf_params = {k.replace("rf__", ""): v for k, v in grid.best_params_.items() if k.startswith("rf__")}
 
-        # Final LOSO evaluation
+        # Final LOSO evaluation: collect per-fold y_test and y_pred for aggregation
         logo = LeaveOneGroupOut()
         final_results = []
         fold_idx = 1
+
+        # containers to aggregate fold-level arrays
+        loso_test_labels = []
+        loso_test_predictions = []
+
         for train_idx, test_idx in logo.split(features, labels, groups):
             test_subject = groups[test_idx][0]
             print(f"\nLOSO fold {fold_idx}: test subject = {test_subject}")
@@ -250,6 +259,10 @@ def train_classifier(features, labels, config, val_data=None):
             rf.fit(X_train_scaled, y_train)
             y_pred = rf.predict(X_test_scaled)
 
+            # collect per-fold arrays
+            loso_test_labels.append(np.asarray(y_test))
+            loso_test_predictions.append(np.asarray(y_pred))
+
             acc = accuracy_score(y_test, y_pred)
             kappa = cohen_kappa_score(y_test, y_pred)
             f1m = f1_score(y_test, y_pred, average="macro")
@@ -262,14 +275,32 @@ def train_classifier(features, labels, config, val_data=None):
 
             fold_idx += 1
 
+        # Concatenate LOSO fold-level arrays into flat arrays
+        try:
+            loso_test_labels = np.concatenate(loso_test_labels) if len(loso_test_labels) > 0 else np.array([])
+            loso_test_predictions = np.concatenate(loso_test_predictions) if len(loso_test_predictions) > 0 else np.array([])
+        except Exception as e:
+            print("ERROR: failed to concatenate LOSO fold-level arrays:", e)
+            raise
+
+        # package aggregated LOSO outputs
+        loso_aggregated = {
+            "test_labels": loso_test_labels,
+            "test_predictions": loso_test_predictions,
+            "per_fold": final_results
+        }
+
         accs = [r["accuracy"] for r in final_results]
         kappas = [r["kappa"] for r in final_results]
         f1s = [r["f1_macro"] for r in final_results]
 
         print("\nFinal LOSO Performance (Iteration 4):")
-        print(f"  Accuracy: {np.mean(accs):.3f} ± {np.std(accs):.3f}")
-        print(f"  Kappa:    {np.mean(kappas):.3f} ± {np.std(kappas):.3f}")
-        print(f"  F1-macro: {np.mean(f1s):.3f} ± {np.std(f1s):.3f}")
+        if len(accs) > 0:
+            print(f"  Accuracy: {np.mean(accs):.3f} ± {np.std(accs):.3f}")
+            print(f"  Kappa:    {np.mean(kappas):.3f} ± {np.std(kappas):.3f}")
+            print(f"  F1-macro: {np.mean(f1s):.3f} ± {np.std(f1s):.3f}")
+        else:
+            print("  No LOSO folds collected (unexpected).")
 
         # Train final model on ALL data
         scaler = StandardScaler()
@@ -282,56 +313,14 @@ def train_classifier(features, labels, config, val_data=None):
         print("\nFinal Random Forest trained on all data (Iteration 4).")
 
         # Optional: checkpointing during training (if user supplies a validation set & config flags)
-        # NOTE: RF doesn't support partial_fit; this will only run if you call record_training_checkpoint manually.
         if getattr(config, "SAVE_TRAINING_CHECKPOINTS", False) and val_data is not None:
             X_val, y_val = val_data
             visuals_dir = os.path.join(getattr(config, "OUTPUT_DIR", "."), f"visuals_iter{config.CURRENT_ITERATION}")
             os.makedirs(visuals_dir, exist_ok=True)
-            # Example: do a single snapshot after final fit
             record_training_checkpoint(model, X_val, y_val, epoch=0,
                                        output_dir=visuals_dir, prefix='final', class_names=getattr(config, 'CLASS_NAMES', None))
 
-        return model, scaler
+        return model, scaler, loso_aggregated
 
     else:
         raise ValueError("Invalid CURRENT_ITERATION in config (must be 1–4).")
-
-
-def print_performance_metrics(y_true, y_pred):
-    stage_names = ['Wake', 'N1', 'N2', 'N3', 'REM']
-    stage_labels = list(range(5))
-
-    print("\n" + "=" * 70)
-    print("SLEEP STAGE CLASSIFICATION METRICS")
-    print("=" * 70)
-
-    acc = accuracy_score(y_true, y_pred)
-    macro_f1 = f1_score(y_true, y_pred, average='macro')
-    weighted_f1 = f1_score(y_true, y_pred, average='weighted')
-
-    print(f"Accuracy:        {acc:.3f}")
-    print(f"Macro F1:        {macro_f1:.3f}")
-    print(f"Weighted F1:     {weighted_f1:.3f}")
-
-    cm = confusion_matrix(y_true, y_pred, labels=stage_labels)
-    print("\nConfusion Matrix:")
-    print(pd.DataFrame(cm, index=stage_names, columns=stage_names).to_string())
-
-    print("\nPer-Class Metrics:")
-    print("-" * 70)
-    print(f"{'Stage':<8}{'Accuracy':<10}{'Sensitivity':<12}{'Specificity':<12}{'F1-Score':<10}")
-
-    for i, name in enumerate(stage_names):
-        mask = (y_true == i)
-        class_acc = np.mean(y_pred[mask] == i) if np.sum(mask) > 0 else 0
-        sens = recall_score(y_true, y_pred, labels=[i], average=None, zero_division=0)[0]
-
-        tn = np.sum((y_true != i) & (y_pred != i))
-        fp = np.sum((y_true != i) & (y_pred == i))
-        spec = tn / (tn + fp) if (tn + fp) > 0 else 0.0
-
-        f1 = f1_score(y_true, y_pred, labels=[i], average=None, zero_division=0)[0]
-
-        print(f"{name:<8}{class_acc:<10.3f}{sens:<12.3f}{spec:<12.3f}{f1:<10.3f}")
-
-    print("-" * 70)
