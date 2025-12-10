@@ -3,231 +3,100 @@
 --- Sleep Scoring Pipeline - Iteration 4 ---
 
 === STEP 1: DATA LOADING ===
-Loading all training data from S:/SignalGoupWork/training...
-Found 10 recordings
 
-Loading R1...
-Loading training data from S:/SignalGoupWork/training\R1.edf and S:/SignalGoupWork/training\R1.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
+Processing R1...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R1: duration=32520.0s, epochs=1084, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
+Inferred canonical channel lists from first recording.
 
-Loaded 1084 epochs (9.03 hours)
-Sleep stage distribution:
-  Wake: 333 epochs (30.7%)
-  N1: 47 epochs (4.3%)
-  N2: 457 epochs (42.2%)
-  N3: 145 epochs (13.4%)
-  REM: 102 epochs (9.4%)
+Processing R10...
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R10: duration=32520.0s, epochs=1084, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 
-Loading R10...
-Loading training data from S:/SignalGoupWork/training\R10.edf and S:/SignalGoupWork/training\R10.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
+Processing R2...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R2: duration=32370.0s, epochs=1079, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 
-Loaded 1084 epochs (9.03 hours)
-Sleep stage distribution:
-  Wake: 251 epochs (23.2%)
-  N1: 11 epochs (1.0%)
-  N2: 491 epochs (45.3%)
-  N3: 163 epochs (15.0%)
-  REM: 168 epochs (15.5%)
+Processing R3...
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R3: duration=31470.0s, epochs=1049, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 
-Loading R2...
-Loading training data from S:/SignalGoupWork/training\R2.edf and S:/SignalGoupWork/training\R2.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
+Processing R4...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R4: duration=26250.0s, epochs=875, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 
-Loaded 1079 epochs (8.99 hours)
-Sleep stage distribution:
-  Wake: 716 epochs (66.4%)
-  N1: 3 epochs (0.3%)
-  N2: 238 epochs (22.1%)
-  N3: 61 epochs (5.7%)
-  REM: 61 epochs (5.7%)
+Processing R5...
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R5: duration=32520.0s, epochs=1084, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 
-Loading R3...
-Loading training data from S:/SignalGoupWork/training\R3.edf and S:/SignalGoupWork/training\R3.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
+Processing R6...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R6: duration=32520.0s, epochs=1084, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 
-Loaded 1049 epochs (8.74 hours)
-Sleep stage distribution:
-  Wake: 332 epochs (31.6%)
-  N1: 35 epochs (3.3%)
-  N2: 289 epochs (27.6%)
-  N3: 307 epochs (29.3%)
-  REM: 86 epochs (8.2%)
+Processing R7...
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R7: duration=27570.0s, epochs=919, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 
-Loading R4...
-Loading training data from S:/SignalGoupWork/training\R4.edf and S:/SignalGoupWork/training\R4.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
+Processing R8...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
+NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+Loaded R8: duration=28770.0s, epochs=959, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 
-Loaded 875 epochs (7.29 hours)
-Sleep stage distribution:
-  Wake: 273 epochs (31.2%)
-  N1: 18 epochs (2.1%)
-  N2: 177 epochs (20.2%)
-  N3: 315 epochs (36.0%)
-  REM: 92 epochs (10.5%)
-
-Loading R5...
-Loading training data from S:/SignalGoupWork/training\R5.edf and S:/SignalGoupWork/training\R5.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
+Processing R9...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
-
-Loaded 1084 epochs (9.03 hours)
-Sleep stage distribution:
-  Wake: 344 epochs (31.7%)
-  N1: 42 epochs (3.9%)
-  N2: 508 epochs (46.9%)
-  N3: 99 epochs (9.1%)
-  REM: 91 epochs (8.4%)
-
-Loading R6...
-Loading training data from S:/SignalGoupWork/training\R6.edf and S:/SignalGoupWork/training\R6.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
-
-Loaded 1084 epochs (9.03 hours)
-Sleep stage distribution:
-  Wake: 310 epochs (28.6%)
-  N1: 48 epochs (4.4%)
-  N2: 529 epochs (48.8%)
-  N3: 39 epochs (3.6%)
-  REM: 158 epochs (14.6%)
-
-Loading R7...
-Loading training data from S:/SignalGoupWork/training\R7.edf and S:/SignalGoupWork/training\R7.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
-
-Loaded 919 epochs (7.66 hours)
-Sleep stage distribution:
-  Wake: 254 epochs (27.6%)
-  N1: 18 epochs (2.0%)
-  N2: 459 epochs (49.9%)
-  N3: 40 epochs (4.4%)
-  REM: 148 epochs (16.1%)
-
-Loading R8...
-Loading training data from S:/SignalGoupWork/training\R8.edf and S:/SignalGoupWork/training\R8.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
-
-Loaded 959 epochs (7.99 hours)
-Sleep stage distribution:
-  Wake: 288 epochs (30.0%)
-  N1: 15 epochs (1.6%)
-  N2: 362 epochs (37.7%)
-  N3: 213 epochs (22.2%)
-  REM: 81 epochs (8.4%)
-
-Loading R9...
-Loading training data from S:/SignalGoupWork/training\R9.edf and S:/SignalGoupWork/training\R9.xml...
-Identified channels:
-  EEG: ['EEG(sec)', 'EEG']
-  EOG: ['EOG(L)', 'EOG(R)']
-  EMG: ['EMG']
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EEG: 2 channels, 3750 samples/epoch, 125.0 Hz
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EOG: 2 channels, 3750 samples/epoch, 125.0 Hz
-NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-  EMG: 1 channels, 3750 samples/epoch, 125.0 Hz
-
-Loaded 1086 epochs (9.05 hours)
-Sleep stage distribution:
-  Wake: 383 epochs (35.3%)
-  N1: 38 epochs (3.5%)
-  N2: 298 epochs (27.4%)
-  N3: 236 epochs (21.7%)
-  REM: 131 epochs (12.1%)
-
+Loaded R9: duration=32580.0s, epochs=1086, fs=125.0 Hz
+  EEG: 2  EOG: 2  EMG: 1  Other: 1
 Combined EEG shape: (10303, 2, 3750)
 Combined EOG shape: (10303, 2, 3750)
 Combined EMG shape: (10303, 1, 3750)
+Combined OTHER shape: (10303, 1, 3750)
 
 Total loaded: 10303 epochs from 10 recordings
-Record IDs: [np.str_('R1'), np.str_('R10'), np.str_('R2'), np.str_('R3'), np.str_('R4'), np.str_('R5'), np.str_('R6'), np.str_('R7'), np.str_('R8'), np.str_('R9')]
-Sleep stage distribution:
-  Wake: 3484 epochs (33.8%)
-  N1: 275 epochs (2.7%)
-  N2: 3808 epochs (37.0%)
-  N3: 1618 epochs (15.7%)
-  REM: 1118 epochs (10.9%)
+Channel info keys: ['eeg_fs', 'eeg_names', 'emg_fs', 'emg_names', 'eog_fs', 'eog_names', 'epoch_length', 'fs', 'other_fs', 'other_names']
+Label distribution:
+  Wake: 3484 (33.8%)
+  N1: 275 (2.7%)
+  N2: 3808 (37.0%)
+  N3: 1618 (15.7%)
+  REM: 1118 (10.9%)
 
 Data loading summary:
   EEG: (10303, 2, 3750)
@@ -239,8 +108,6 @@ Data loading summary:
 
 === STEP 2: PREPROCESSING ===
 Preprocessing data for iteration 4...
-Processing multi-channel data (EEG + EOG + EMG)
-Multi-channel preprocessing applied to EEG + EOG + EMG
 Iteration 3: Removing EOG artifacts from EEG using LinearRegression...
 Iteration 3: Applying EMG-based adaptive low-pass filtering on EEG...
 EMG 20–40 Hz power threshold (75th percentile): 2.0723e-11
@@ -248,115 +115,54 @@ Preprocessed EEG shape: (10303, 2, 3750)
 
 === STEP 3: FEATURE EXTRACTION ===
 Extracting features for iteration 4...
-[DEBUG] Multi-channel Iteration 4: (10303, 105) features extracted.
-Extracted features shape: (10303, 105)
+[DEBUG] Multi-channel Iteration 4: (10303, 109) features extracted.
+Extracted features shape: (10303, 109)
 
-=== DEBUG: Raw features shape === (10303, 105)
+=== DEBUG: Raw features shape === (10303, 109)
 
 === STEP 4: FEATURE SELECTION ===
 
-=== Feature Selection Pipeline (Iteration 4) ===
-Initial feature count: 105
+=== Robust Feature Selection (Iteration 4) ===
+Initial feature count: 109
 
-[Stage 1] Variance Thresholding (conservative)...
-  Removed 12 low-variance features
-  Remaining after stage1: 93
-
-[Stage 2] Correlation Filtering (group-wise, keep highest-variance)...
-  Removed 25 correlated features (|r| > 0.95)
-  Remaining after stage2: 68
-
-[Stage 3] Mutual Information Ranking...
-  Selected top-40 features via mutual information.
-  Final feature count: 40
-Selected features shape: (10303, 40)
+[Stage Global] LOSO not enabled or groups not provided — running global selection on whole dataset.
+Final selected feature count: 14
+Selected features shape: (10303, 14)
 
 === STEP 5: CLASSIFICATION ===
 
 ====================================================
  Training Classifier (Iteration 4)
 ====================================================
-Features shape: (10303, 40)
+Features shape: (10303, 14)
 Labels shape:   (10303,)
 
 
-=== Iteration 4: Random Forest + Hyperparameter Tuning + LOSO ===
+=== Iteration 4: delegated training (RF tuning + LOSO or CNN/HYBRID via classification_cnn_rf) ===
 
-Fitting 5 folds for each of 24 candidates, totalling 120 fits
 
-Best parameters from GroupKFold grid search:
-{'rf__max_depth': 10, 'rf__min_samples_leaf': 2, 'rf__min_samples_split': 5, 'rf__n_estimators': 100}
-Best macro-F1: 0.602
-
-LOSO fold 1: test subject = R1
-  Accuracy:  0.709
-  Kappa:     0.596
-  F1-macro:  0.608
-
-LOSO fold 2: test subject = R10
-  Accuracy:  0.756
-  Kappa:     0.664
-  F1-macro:  0.641
-
-LOSO fold 3: test subject = R2
-  Accuracy:  0.804
-  Kappa:     0.644
-  F1-macro:  0.550
-
-LOSO fold 4: test subject = R3
-  Accuracy:  0.794
-  Kappa:     0.724
-  F1-macro:  0.683
-
-LOSO fold 5: test subject = R4
-  Accuracy:  0.741
-  Kappa:     0.658
-  F1-macro:  0.668
-
-LOSO fold 6: test subject = R5
-  Accuracy:  0.772
-  Kappa:     0.672
-  F1-macro:  0.630
-
-LOSO fold 7: test subject = R6
-  Accuracy:  0.718
-  Kappa:     0.567
-  F1-macro:  0.542
-
-LOSO fold 8: test subject = R7
-  Accuracy:  0.589
-  Kappa:     0.369
-  F1-macro:  0.476
-
-LOSO fold 9: test subject = R8
-  Accuracy:  0.780
-  Kappa:     0.689
-  F1-macro:  0.622
-
-LOSO fold 10: test subject = R9
-  Accuracy:  0.592
-  Kappa:     0.454
-  F1-macro:  0.530
-
-Final LOSO Performance (Iteration 4):
-  Accuracy: 0.726 ± 0.074
-  Kappa:    0.604 ± 0.106
-  F1-macro: 0.595 ± 0.064
-
-Final Random Forest trained on all data (Iteration 4).
+=== train_classifier (CNN/RF/HYBRID) ===
+Model type: RF
+Features shape: (10303, 14)
+Labels shape: (10303,)
+Training Random Forest on provided features (flat expected).
+Random Forest trained.
+Iteration 4: delegated training complete.
 Trained random_forest classifier
 Data cached to cache/model_iter4.joblib
 Saved trained model, scaler and selector to cache: model_iter4.joblib
 
 === STEP 6: VISUALIZATION ===
 Visualizing results... (debug mode)
-DEBUG: Using loso_aggregated provided by training.
-DEBUG: loso_aggregated[test_labels] -> dtype=int64, shape=(10303,), preview=[0, 0, 0, 0, 0, 0, 0, 0]
-DEBUG: loso_aggregated[test_predictions] -> dtype=int64, shape=(10303,), preview=[0, 0, 0, 0, 0, 0, 0, 0]
-  Total loso aggregated test samples: 10303
-✓ Saved figure: outputs\visuals_iter4\confusion_loso_raw.png
-✓ Saved figure: outputs\visuals_iter4\confusion_loso_norm.png
-✓ Saved figure: outputs\visuals_iter4\class_dist_loso.png
+DEBUG: No loso_aggregated used (either not provided or not Iteration 2).
+DEBUG: features.shape = (10303, 14), labels.shape = (10303,)
+DEBUG: Performed stratified train_test_split(test_size=0.2, random_state=42).
+DEBUG: y_test (from fallback split) -> dtype=int64, shape=(2061,), preview=[4, 2, 2, 2, 4, 2, 2, 2]
+DEBUG: y_pred (model.predict on X_test) -> dtype=int64, shape=(2061,), preview=[4, 2, 2, 2, 4, 2, 2, 2]
+  Total fallback split test samples: 2061 (≈20% of dataset if train_test_split succeeded)
+✓ Saved figure: ./outputs/visuals_iter4\confusion_visual_raw.png
+✓ Saved figure: ./outputs/visuals_iter4\confusion_visual_norm.png
+✓ Saved figure: ./outputs/visuals_iter4\class_dist_visual.png
 Visualization complete. Files saved at: S:\SignalGoupWork\SignalGroup2\outputs\visuals_iter4
 
 === STEP 7: PROCESSING LOG & REPORT GENERATION ===
@@ -369,23 +175,23 @@ Visualization complete. Files saved at: S:\SignalGoupWork\SignalGroup2\outputs\v
 RandomForestClassifier
 
 ## Performance Metrics (20% Test Split)
-Accuracy: 0.884
-Kappa: 0.840
-Macro F1-score: 0.836
-Weighted F1-score: 0.888
+Accuracy: 0.978
+Kappa: 0.969
+Macro F1-score: 0.980
+Weighted F1-score: 0.978
 
 
 Confusion Matrix:
       Wake  N1   N2   N3  REM
-Wake   613  28   42    1   13
-N1       3  50    2    0    0
-N2      10  24  662   43   23
-N3       0   0   22  302    0
-REM      1   4   22    1  195
+Wake   674   0   15    3    5
+N1       0  55    0    0    0
+N2       2   1  745   13    1
+N3       0   0    4  320    0
+REM      0   0    2    0  221
 
 ## Features
 ### Feature Count
-- Total features: 40
+- Total features: 14
 
 Note: Feature details for Iteration 4 may include multi-signal features (EEG+EOG+EMG).
 

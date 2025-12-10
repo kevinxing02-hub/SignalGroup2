@@ -3,7 +3,7 @@ from src.data_loader import load_all_training_data
 from src.preprocessing import preprocess
 from src.feature_extraction import extract_features
 from src.feature_selection import select_features
-from src.classification import train_classifier
+from src.classification_cnn import train_classifier
 from src.visualization import visualize_results
 from src.report import generate_report
 from src.utils import save_cache, load_cache
@@ -192,7 +192,7 @@ def main():
 
     print("\n=== DEBUG: Raw features shape ===", features.shape)
 
-    features = subject_zscore(features, record_ids)
+    #features = subject_zscore(features, record_ids)
 
     # ============================================================
     # STEP 4: FEATURE SELECTION

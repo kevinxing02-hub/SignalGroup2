@@ -1,17 +1,22 @@
+# feature_extraction.py
 # ======================================================================
-#                      FEATURE EXTRACTION (ITERATION 3)
+#                      FEATURE EXTRACTION (ITERATION 4)
 # ======================================================================
 
 import numpy as np
 import scipy.stats  # Used for calculating skewness and kurtosis
 from scipy.signal import welch, butter, filtfilt, find_peaks
 from scipy.linalg import toeplitz
+from typing import Dict, Any, Tuple, Optional
 
 try:
     import nolds  # Sample Entropy package (optional)
 except ImportError:
     nolds = None
 
+# Import sigma extractor from your extra_band module (you said you created it)
+# It must expose: extract_sigma_features(eeg_epochs, fs, sigma_band=(12,15), ...)
+from src.extra_band import extract_sigma_features
 
 # ======================================================================
 #                       GLOBAL SETTINGS
@@ -19,6 +24,9 @@ except ImportError:
 
 ENABLE_SAMPLE_ENTROPY = False  # Toggle ON to enable SampEn
 
+# When True: produce sigma features per channel (4 * n_channels features).
+# When False: aggregate across channels and produce 4 features per epoch.
+SIGMA_PER_CHANNEL = False
 
 # ======================================================================
 #                       SECTION 1: TIME-DOMAIN FEATURES (EEG)
@@ -28,42 +36,44 @@ def extract_time_domain_features(epoch: np.ndarray) -> dict:
     """
     Extract the 16 required time-domain features.
     """
+    # Flatten to 1D
+    epoch = np.asarray(epoch).ravel()
     # --- Statistical (6)
-    mean_val = np.mean(epoch)
-    median_val = np.median(epoch)
-    std_val = np.std(epoch)
-    var_val = np.var(epoch)
-    skew_val = scipy.stats.skew(epoch)
-    kurt_val = scipy.stats.kurtosis(epoch)
+    mean_val = float(np.mean(epoch))
+    median_val = float(np.median(epoch))
+    std_val = float(np.std(epoch))
+    var_val = float(np.var(epoch))
+    skew_val = float(scipy.stats.skew(epoch))
+    kurt_val = float(scipy.stats.kurtosis(epoch))
 
     # --- Amplitude (4)
-    rms_val = np.sqrt(np.mean(epoch ** 2))
-    min_val = np.min(epoch)
-    max_val = np.max(epoch)
-    range_val = max_val - min_val
+    rms_val = float(np.sqrt(np.mean(epoch ** 2)))
+    min_val = float(np.min(epoch))
+    max_val = float(np.max(epoch))
+    range_val = float(max_val - min_val)
 
     # --- Hjorth (3)
     diff_sig = np.diff(epoch)
     hjorth_activity = var_val
 
     if var_val > 0:
-        hjorth_mobility = np.sqrt(np.var(diff_sig) / var_val)
+        hjorth_mobility = float(np.sqrt(np.var(diff_sig) / var_val))
     else:
         hjorth_mobility = 0.0
 
     var_diff = np.var(diff_sig)
     if var_diff > 0 and hjorth_mobility > 0:
-        mobility_diff = np.sqrt(np.var(np.diff(diff_sig)) / var_diff)
-        hjorth_complexity = mobility_diff / hjorth_mobility
+        mobility_diff = float(np.sqrt(np.var(np.diff(diff_sig)) / var_diff))
+        hjorth_complexity = float(mobility_diff / hjorth_mobility)
     else:
         hjorth_complexity = 0.0
 
     # --- Frequency-related (2)
-    zero_crossings = np.sum(np.diff(np.sign(epoch)) != 0)
-    total_energy = np.sum(epoch ** 2)
+    zero_crossings = float(np.sum(np.diff(np.sign(epoch)) != 0))
+    total_energy = float(np.sum(epoch ** 2))
 
     # --- Complexity (1)
-    sample_entropy_val = compute_sample_entropy(epoch)
+    sample_entropy_val = float(compute_sample_entropy(epoch))
 
     features = {
         'mean': mean_val,
@@ -109,6 +119,7 @@ def compute_sample_entropy(epoch, m=2, r_ratio=0.2, max_entropy_length=1000):
 
     try:
         tolerance = r_ratio * np.std(epoch)
+        # nolds.sampen accepts (signal, emb_dim=m, tolerance=tolerance)
         return float(nolds.sampen(epoch, emb_dim=m, tolerance=tolerance))
     except Exception:
         return 0.0
@@ -118,13 +129,13 @@ def compute_sample_entropy(epoch, m=2, r_ratio=0.2, max_entropy_length=1000):
 #                SECTION 2: AR & WELCH SPECTRAL FEATURES (EEG)
 # ======================================================================
 
-# Sleep EEG bands according to AASM (sigma lagt lite överlappande)
+# Sleep EEG bands — set Sigma to spindle-specific 12-15 Hz
 EEG_BANDS = {
     "delta": (0.5, 4.0),
     "theta": (4.0, 8.0),
-    "alpha": (8.0, 13.0),
-    "sigma": (11.0, 16.0),
-    "beta":  (13.0, 30.0),
+    "alpha": (8.0, 12.0),
+    "sigma": (12.0, 15.0),   # spindle-specific sigma
+    "beta":  (15.0, 30.0),
 }
 
 
@@ -174,7 +185,7 @@ def _spectral_edge_frequency(freqs: np.ndarray, psd: np.ndarray,
     if total <= 0:
         return 0.0
 
-    # numerisk integral genom trapezoid-summa
+    # numerical integral via trapezoid cumulative sum
     cumsum = np.cumsum((band_psd[:-1] + band_psd[1:]) / 2.0 * np.diff(band_freqs))
     target = edge * total
     idx = np.searchsorted(cumsum, target)
@@ -205,7 +216,7 @@ def _compute_welch_psd(epoch: np.ndarray, fs: float):
 
     # 4-second windows with 50% overlap (common in sleep EEG)
     n_samples = len(epoch)
-    nperseg = int(min(n_samples, max(fs * 4.0, fs)))  # at least 1 s, at most full epoch
+    nperseg = int(min(n_samples, max(int(fs * 4.0), int(fs))))
     if nperseg < 8:  # very short fallback
         nperseg = n_samples
     noverlap = nperseg // 2
@@ -449,7 +460,7 @@ def extract_single_channel_features(data, config):
 
 
 # ======================================================================
-#      SECTION 6: MULTI-CHANNEL FEATURE EXTRACTION (Iteration 2 & 3)
+#      SECTION 6: MULTI-CHANNEL FEATURE EXTRACTION (Iteration 2 & 3 & 4)
 # ======================================================================
 
 def extract_multi_channel_features(multi_channel_data, config):
@@ -460,13 +471,14 @@ def extract_multi_channel_features(multi_channel_data, config):
         - 16 time-domain features
         - Welch spectral features
         - AR spectral features
+        - Sigma band features (12-15 Hz): abs, rel, sigma/beta, spindle density
 
     Iteration 2:
-        EEG + EOG (simpla EOG-features)
+        EEG + EOG (simple EOG-features)
     Iteration 3:
-        EEG (samma som iteration 2)
-        EOG: ~6 features/kanal med REM-detektionsscore
-        EMG: 3–4 features per kanal (power, var, std, 20–40 Hz ratio)
+        EEG (same as iteration 2)
+        EOG: ~6 features/channel with REM detection score
+        EMG: 3–4 features per channel (power, var, std, 20–40 Hz ratio)
 
     Returns:
         features: (n_epochs, n_features)
@@ -475,6 +487,10 @@ def extract_multi_channel_features(multi_channel_data, config):
     eeg = multi_channel_data["eeg"]  # (n_epochs, eeg_channels, samples)
     n_epochs, eeg_channels, eeg_samples = eeg.shape
     eeg_fs = eeg_samples / 30.0  # 30 s epoch
+
+    # Compute sigma features for all epochs at once (efficient)
+    # sigma_band default defined in extra_band.extract_sigma_features as (12,15)
+    sigma_feats_all, sigma_meta = extract_sigma_features(eeg, fs=eeg_fs, sigma_band=(12.0, 15.0), per_channel=SIGMA_PER_CHANNEL)
 
     # ------------- EOG -------------
     use_eog = ("eog" in multi_channel_data) and (config.CURRENT_ITERATION >= 2)
@@ -489,7 +505,7 @@ def extract_multi_channel_features(multi_channel_data, config):
     # ------------- EMG -------------
     use_emg = ("emg" in multi_channel_data) and (config.CURRENT_ITERATION >= 3)
     if use_emg:
-        emg = multi_channel_data["emg"]  # (n_epochs, 1, samples)
+        emg = multi_channel_data["emg"]  # (n_epochs, n_emg_ch, samples)
         _, emg_channels, emg_samples = emg.shape
         emg_fs = emg_samples / 30.0
     else:
@@ -505,7 +521,7 @@ def extract_multi_channel_features(multi_channel_data, config):
         epoch_features = []
 
         # ============================================
-        # 1. EEG FEATURES (Iteration 1 + spectral)
+        # 1. EEG FEATURES (time-domain + spectral + sigma)
         # ============================================
         for ch in range(eeg_channels):
             signal = eeg[i, ch, :]
@@ -523,6 +539,15 @@ def extract_multi_channel_features(multi_channel_data, config):
             epoch_features.extend(list(w_feats.values()))
             epoch_features.extend(list(ar_feats.values()))
 
+        # Append sigma features for this epoch:
+        # sigma_feats_all shape:
+        #   if SIGMA_PER_CHANNEL False: (n_epochs, 4)
+        #   if SIGMA_PER_CHANNEL True:  (n_epochs, 4 * n_channels)
+        if sigma_feats_all is not None:
+            # convert to 1D vector for epoch i
+            row = np.asarray(sigma_feats_all[i]).ravel()
+            epoch_features.extend(row.tolist())
+
         # ============================================
         # 2. EOG FEATURES (Iteration 2 & 3)
         # ============================================
@@ -532,7 +557,7 @@ def extract_multi_channel_features(multi_channel_data, config):
                 eog_feats = extract_eog_features(eog_signal, fs=eog_fs)
                 epoch_features.extend(list(eog_feats.values()))
 
-            # EOG cross-channel correlation (vänster/höger)
+            # EOG cross-channel correlation (left/right)
             if eog_channels >= 2:
                 eog_left = eog[i, 0, :]
                 eog_right = eog[i, 1, :]
@@ -546,18 +571,28 @@ def extract_multi_channel_features(multi_channel_data, config):
         # 3. EMG FEATURES (Iteration 3)
         # ============================================
         if use_emg and emg_channels >= 1:
-            # antar 1 EMG-kanal
-            emg_signal = emg[i, 0, :]
-            emg_feats = extract_emg_features(emg_signal, fs=emg_fs)
-            epoch_features.extend(list(emg_feats.values()))
+            # assume multiple EMG channels supported; average features across channels
+            emg_epoch_feats = []
+            for ch in range(emg_channels):
+                emg_signal = emg[i, ch, :]
+                emg_feats = extract_emg_features(emg_signal, fs=emg_fs)
+                emg_epoch_feats.extend(list(emg_feats.values()))
+            # flatten / append
+            epoch_features.extend(emg_epoch_feats)
 
         # Spara epoch-vektorn
         all_feature_vectors.append(epoch_features)
 
-    features = np.array(all_feature_vectors)
-    print(f"[DEBUG] Multi-channel Iteration {config.CURRENT_ITERATION}: {features.shape} features extracted.")
+    features = np.array(all_feature_vectors, dtype=object)
+    # Convert ragged list of features to 2D array (pad with zeros if necessary)
+    # Many feature dictionaries produce consistent-length vectors; ensure final shape numeric
+    max_len = max(len(vec) for vec in all_feature_vectors)
+    X = np.zeros((len(all_feature_vectors), max_len), dtype=float)
+    for r, vec in enumerate(all_feature_vectors):
+        X[r, : len(vec)] = np.asarray(vec, dtype=float)
 
-    return features
+    print(f"[DEBUG] Multi-channel Iteration {config.CURRENT_ITERATION}: {X.shape} features extracted.")
+    return X
 
 
 # ======================================================================
@@ -566,13 +601,13 @@ def extract_multi_channel_features(multi_channel_data, config):
 
 def extract_eog_features(eog_signal, fs):
     """
-    EOG Features (~6 features per channel), fokuserade på REM:
+    EOG Features (~6 features per channel), focused on REM:
 
     - eog_peak_amp: max |x|
     - eog_variance
     - eog_zero_crossings
-    - eog_rem_peak_count: antal snabba deflektioner i high-passat (>0.5 Hz) EOG
-    - eog_rem_peak_rate: peaks per sekund
+    - eog_rem_peak_count: number of fast deflections in high-passed (>0.5 Hz) EOG
+    - eog_rem_peak_rate: peaks per second
     - eog_movement_energy: sum(diff(x)^2)
     """
     eog_signal = np.asarray(eog_signal, dtype=float).ravel()
@@ -601,7 +636,7 @@ def extract_eog_features(eog_signal, fs):
         rem_peak_count = 0
         rem_peak_rate = 0.0
     else:
-        # tröskel 1.5 * std, min distance ~100 ms
+        # threshold 1.5 * std, min distance ~100 ms
         threshold = 1.5 * hp_std
         peaks, _ = find_peaks(
             np.abs(hp_sig),
@@ -632,7 +667,7 @@ def extract_emg_features(emg_signal, fs):
     """
     EMG Features (~3–4 features per channel):
 
-    - emg_power: mean squared amplitude (muskeltonus)
+    - emg_power: mean squared amplitude (muscle tone)
     - emg_variance
     - emg_std
     - emg_hf_power_ratio_20_40: power(20–40 Hz) / power(0–40 Hz)

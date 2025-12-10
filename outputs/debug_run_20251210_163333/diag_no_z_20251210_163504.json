@@ -1,0 +1,164 @@
+{
+  "data_summary": {
+    "eeg_shape": [
+      10303,
+      2,
+      3750
+    ],
+    "eog_shape": [
+      10303,
+      2,
+      3750
+    ],
+    "emg_shape": [
+      10303,
+      1,
+      3750
+    ]
+  },
+  "n_labels": 10303,
+  "n_unique_record_ids": 10,
+  "n_total_epochs": 10303,
+  "raw_features_shape": [
+    10303,
+    105
+  ],
+  "pre_normalization_checks": {
+    "n_samples_features": 10303,
+    "n_features": 105,
+    "n_samples_record_ids": 10303,
+    "match_lengths": true,
+    "n_subjects": 10,
+    "epoch_counts_min": 875,
+    "epoch_counts_median": 1081.5,
+    "epoch_counts_max": 1086,
+    "n_single_epoch_subjects": 0,
+    "single_epoch_subject_examples": [],
+    "per_subject_sample_stats": {
+      "R1": {
+        "n_epochs": 1084,
+        "mean_abs_mean": 20.953374002863715,
+        "mean_std": 8.103280064905865
+      },
+      "R10": {
+        "n_epochs": 1084,
+        "mean_abs_mean": 22.658230805954677,
+        "mean_std": 6.880392116307005
+      },
+      "R2": {
+        "n_epochs": 1079,
+        "mean_abs_mean": 27.960603701882267,
+        "mean_std": 10.807271240564136
+      },
+      "R3": {
+        "n_epochs": 1049,
+        "mean_abs_mean": 14.886652718499008,
+        "mean_std": 5.376661743200138
+      },
+      "R4": {
+        "n_epochs": 875,
+        "mean_abs_mean": 15.179480717581674,
+        "mean_std": 5.711561426112776
+      },
+      "R5": {
+        "n_epochs": 1084,
+        "mean_abs_mean": 16.75793703665359,
+        "mean_std": 4.608308421140736
+      },
+      "R6": {
+        "n_epochs": 1084,
+        "mean_abs_mean": 16.742026766485573,
+        "mean_std": 6.2618796839187825
+      },
+      "R7": {
+        "n_epochs": 919,
+        "mean_abs_mean": 21.446589160602745,
+        "mean_std": 5.239283244182578
+      },
+      "R8": {
+        "n_epochs": 959,
+        "mean_abs_mean": 15.172206213949433,
+        "mean_std": 5.6007914010840905
+      },
+      "R9": {
+        "n_epochs": 1086,
+        "mean_abs_mean": 17.589761682132206,
+        "mean_std": 7.717819295829262
+      }
+    }
+  },
+  "post_normalization_checks": {
+    "n_samples_features": 10303,
+    "n_features": 105,
+    "n_samples_record_ids": 10303,
+    "match_lengths": true,
+    "n_subjects": 10,
+    "epoch_counts_min": 875,
+    "epoch_counts_median": 1081.5,
+    "epoch_counts_max": 1086,
+    "n_single_epoch_subjects": 0,
+    "single_epoch_subject_examples": [],
+    "per_subject_sample_stats": {
+      "R1": {
+        "n_epochs": 1084,
+        "mean_abs_mean": 20.953374002863715,
+        "mean_std": 8.103280064905865
+      },
+      "R10": {
+        "n_epochs": 1084,
+        "mean_abs_mean": 22.658230805954677,
+        "mean_std": 6.880392116307005
+      },
+      "R2": {
+        "n_epochs": 1079,
+        "mean_abs_mean": 27.960603701882267,
+        "mean_std": 10.807271240564136
+      },
+      "R3": {
+        "n_epochs": 1049,
+        "mean_abs_mean": 14.886652718499008,
+        "mean_std": 5.376661743200138
+      },
+      "R4": {
+        "n_epochs": 875,
+        "mean_abs_mean": 15.179480717581674,
+        "mean_std": 5.711561426112776
+      },
+      "R5": {
+        "n_epochs": 1084,
+        "mean_abs_mean": 16.75793703665359,
+        "mean_std": 4.608308421140736
+      },
+      "R6": {
+        "n_epochs": 1084,
+        "mean_abs_mean": 16.742026766485573,
+        "mean_std": 6.2618796839187825
+      },
+      "R7": {
+        "n_epochs": 919,
+        "mean_abs_mean": 21.446589160602745,
+        "mean_std": 5.239283244182578
+      },
+      "R8": {
+        "n_epochs": 959,
+        "mean_abs_mean": 15.172206213949433,
+        "mean_std": 5.6007914010840905
+      },
+      "R9": {
+        "n_epochs": 1086,
+        "mean_abs_mean": 17.589761682132206,
+        "mean_std": 7.717819295829262
+      }
+    }
+  },
+  "selected_features_shape": [
+    10303,
+    14
+  ],
+  "errors": [
+    {
+      "error": "Iteration 4 requires config.record_ids (one subject ID per epoch).",
+      "traceback": "Traceback (most recent call last):\n  File \"s:\\SignalGoupWork\\SignalGroup2\\Python\\main.py\", line 214, in run_pipeline_once\n    model, scaler, loso_aggregated = train_classifier(selected_features, labels, config)\n                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"s:\\SignalGoupWork\\SignalGroup2\\Python\\src\\classification.py\", line 206, in train_classifier\n    raise ValueError(\"Iteration 4 requires config.record_ids (one subject ID per epoch).\")\nValueError: Iteration 4 requires config.record_ids (one subject ID per epoch).\n"
+    }
+  ]
+}
