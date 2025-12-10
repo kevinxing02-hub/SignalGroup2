@@ -174,49 +174,78 @@ def load_training_data(edf_file_path, xml_file_path, epoch_length=30, target_fs=
     eeg_channels, eog_channels, emg_channels, other_channels = identify_channels(channel_names)
 
     multi_channel_data = {}
-    channel_info = {'epoch_length': epoch_length, 'fs': rec_info['fs'],
-                    'eeg_names': eeg_channels, 'eog_names': eog_channels,
-                    'emg_names': emg_channels, 'other_names': other_channels}
+    # CHANGED: channel_info now records per-group fs, samples_per_epoch and channel names
+    channel_info = {
+        'epoch_length': epoch_length,
+        'global_fs': rec_info['fs'],
+        'global_samps_per_epoch': rec_info['samples_per_epoch'],
+        'duration': rec_info['duration'],
+        'record_id': Path(edf_file_path).stem
+    }
 
-    # Extract per-type epochs if present
+    # Extract per-type epochs if present and record per-group metadata
     if eeg_channels:
         eeg_raw = raw.copy().pick_channels(eeg_channels)
         eeg_epochs, eeg_fs = _extract_epochs_from_raw(eeg_raw, epoch_length, n_epochs)
         multi_channel_data['eeg'] = eeg_epochs
         channel_info['eeg_fs'] = eeg_fs
+        channel_info['eeg_samps_per_epoch'] = eeg_epochs.shape[2]
+        channel_info['eeg_names'] = eeg_channels
 
     if eog_channels:
         eog_raw = raw.copy().pick_channels(eog_channels)
         eog_epochs, eog_fs = _extract_epochs_from_raw(eog_raw, epoch_length, n_epochs)
         multi_channel_data['eog'] = eog_epochs
         channel_info['eog_fs'] = eog_fs
+        channel_info['eog_samps_per_epoch'] = eog_epochs.shape[2]
+        channel_info['eog_names'] = eog_channels
 
     if emg_channels:
         emg_raw = raw.copy().pick_channels(emg_channels)
         emg_epochs, emg_fs = _extract_epochs_from_raw(emg_raw, epoch_length, n_epochs)
         multi_channel_data['emg'] = emg_epochs
         channel_info['emg_fs'] = emg_fs
+        channel_info['emg_samps_per_epoch'] = emg_epochs.shape[2]
+        channel_info['emg_names'] = emg_channels
 
     if other_channels:
         other_raw = raw.copy().pick_channels(other_channels)
         other_epochs, other_fs = _extract_epochs_from_raw(other_raw, epoch_length, n_epochs)
         multi_channel_data['other'] = other_epochs
         channel_info['other_fs'] = other_fs
+        channel_info['other_samps_per_epoch'] = other_epochs.shape[2]
+        channel_info['other_names'] = other_channels
 
     # Align to canonical names if provided (makes concatenation safe across recordings)
     if canonical_channel_lists:
         for key in ['eeg', 'eog', 'emg', 'other']:
             if key in canonical_channel_lists and key in multi_channel_data:
+                # CHANGED: use recorded from_names (if present) when aligning
                 from_names = channel_info.get(f'{key}_names', [])
                 canonical_names = canonical_channel_lists[key]
                 multi_channel_data[key] = align_epochs_to_canonical(multi_channel_data[key], from_names, canonical_names)
                 channel_info[f'{key}_names'] = canonical_names
+                # after alignment, samples_per_epoch unchanged; names updated
             # If canonical asks for channel but recording missing, create zeros
             elif key in canonical_channel_lists and key not in multi_channel_data:
-                # create zeros
-                n_samples = rec_info['samples_per_epoch']
+                # CHANGED: determine n_samples for zero array using best available info
+                # priority: canonical_channel_lists -> channel_info specific group -> global samples per epoch -> target_fs -> fallback 125 Hz
+                if key + '_samps_per_epoch' in channel_info:
+                    n_samples = int(channel_info[f'{key}_samps_per_epoch'])
+                else:
+                    # prefer global_samps_per_epoch (from rec_info)
+                    n_samples = int(channel_info.get('global_samps_per_epoch', 0))
+                    if n_samples == 0:
+                        # try to infer from target_fs if caller passed it via channel_info 'target_fs' (not standard)
+                        assumed_fs = channel_info.get('target_fs', None)
+                        if assumed_fs is None:
+                            # fallback to global fs or 125
+                            assumed_fs = channel_info.get('global_fs', 125)
+                        n_samples = int(epoch_length * assumed_fs)
                 multi_channel_data[key] = np.zeros((n_epochs, len(canonical_channel_lists[key]), n_samples))
                 channel_info[f'{key}_names'] = canonical_channel_lists[key]
+                channel_info[f'{key}_samps_per_epoch'] = n_samples
+                channel_info[f'{key}_fs'] = (n_samples / epoch_length) if epoch_length > 0 else None
 
     # Print summary
     print(f"Loaded {Path(edf_file_path).stem}: duration={rec_info['duration']:.1f}s, epochs={n_epochs}, fs={rec_info['fs']} Hz")
@@ -362,9 +391,29 @@ def load_all_training_data(training_dir, epoch_length=30, use_single_recording=F
                         else:
                             # create zero array for missing channel group
                             n_epochs = int(np.ceil(info.get('duration', (labels.size*epoch_length)) / epoch_length)) if 'duration' in info else labels.size
-                            n_samples = int(epoch_length * info.get('eeg_fs', target_fs if target_fs else 125))
+
+                            # CHANGED: determine n_samples using info's group samp-per-epoch if available,
+                            # otherwise fallback to target_fs/global fs or overall rec_info
+                            if f'{key}_samps_per_epoch' in info:
+                                n_samples = int(info[f'{key}_samps_per_epoch'])
+                            else:
+                                # try per-group fs if present
+                                grp_fs = info.get(f'{key}_fs', None)
+                                if grp_fs:
+                                    n_samples = int(epoch_length * grp_fs)
+                                else:
+                                    # try canonical from previously inferred channel_info (outer variable)
+                                    if channel_info is not None and f'{key}_samps_per_epoch' in channel_info:
+                                        n_samples = int(channel_info[f'{key}_samps_per_epoch'])
+                                    else:
+                                        # fallback to provided target_fs or info global fs or 125
+                                        assumed_fs = target_fs if target_fs is not None else info.get('global_fs', 125)
+                                        n_samples = int(epoch_length * assumed_fs)
+
                             multi_channel_data[key] = np.zeros((n_epochs, len(canonical_channel_lists[key]), n_samples))
                             info[f'{key}_names'] = canonical_channel_lists[key]
+                            info[f'{key}_samps_per_epoch'] = n_samples
+                            info[f'{key}_fs'] = (n_samples / epoch_length)
 
             # Append to lists if present
             if 'eeg' in multi_channel_data:

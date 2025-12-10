@@ -90,7 +90,7 @@ Combined EMG shape: (10303, 1, 3750)
 Combined OTHER shape: (10303, 1, 3750)
 
 Total loaded: 10303 epochs from 10 recordings
-Channel info keys: ['eeg_fs', 'eeg_names', 'emg_fs', 'emg_names', 'eog_fs', 'eog_names', 'epoch_length', 'fs', 'other_fs', 'other_names']
+Channel info keys: ['duration', 'eeg_fs', 'eeg_names', 'eeg_samps_per_epoch', 'emg_fs', 'emg_names', 'emg_samps_per_epoch', 'eog_fs', 'eog_names', 'eog_samps_per_epoch', 'epoch_length', 'global_fs', 'global_samps_per_epoch', 'other_fs', 'other_names', 'other_samps_per_epoch', 'record_id']
 Label distribution:
   Wake: 3484 (33.8%)
   N1: 275 (2.7%)
@@ -163,7 +163,7 @@ DEBUG: y_pred (model.predict on X_test) -> dtype=int64, shape=(2061,), preview=[
 ✓ Saved figure: ./outputs/visuals_iter4\confusion_visual_raw.png
 ✓ Saved figure: ./outputs/visuals_iter4\confusion_visual_norm.png
 ✓ Saved figure: ./outputs/visuals_iter4\class_dist_visual.png
-Visualization complete. Files saved at: S:\SignalGoupWork\SignalGroup2\outputs\visuals_iter4
+Visualization complete. Files saved at: S:\KTH_1st\SignalProcessingData\SignalGroup2\outputs\visuals_iter4
 
 === STEP 7: PROCESSING LOG & REPORT GENERATION ===
 
