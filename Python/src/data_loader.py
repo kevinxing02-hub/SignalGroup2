@@ -56,7 +56,8 @@ def compute_recording_info(raw, epoch_length):
     fs = float(raw.info['sfreq'])
     n_samples = int(raw.n_times)
     duration = n_samples / fs
-    samples_per_epoch = int(epoch_length * fs)
+    # use rounding to avoid off-by-one due to float precision
+    samples_per_epoch = int(round(epoch_length * fs))
     n_epochs = int(np.ceil(duration / epoch_length))
     total_needed = n_epochs * samples_per_epoch
     return {'fs': fs, 'n_samples': n_samples, 'duration': duration,
@@ -100,6 +101,11 @@ def align_epochs_to_canonical(epochs, from_names, canonical_names):
     canonical_names: list with length n_canonical
     Returns: aligned (n_epochs, n_canonical, samples) where missing channels are zeros
     """
+    if epochs is None:
+        # nothing to align; return zeros
+        n_epochs = 0
+        n_samples = 0
+        return np.zeros((0, len(canonical_names), 0))
     n_epochs, _, n_samples = epochs.shape
     aligned = np.zeros((n_epochs, len(canonical_names), n_samples), dtype=epochs.dtype)
 
@@ -132,10 +138,63 @@ def _extract_epochs_from_raw(raw, epoch_length, n_epochs=None):
     data = pad_or_trim_signal(data, total_needed)
     n_channels = data.shape[0]
 
-    epochs = data.reshape(n_channels, n_epochs, samples_per_epoch)
-    epochs = np.transpose(epochs, (1, 0, 2))  # (n_epochs, n_channels, samples_per_epoch)
+    # reshape and transpose
+    try:
+        epochs = data.reshape(n_channels, n_epochs, samples_per_epoch)
+        epochs = np.transpose(epochs, (1, 0, 2))  # (n_epochs, n_channels, samples_per_epoch)
+    except Exception:
+        # fallback: if reshape fails (safety), build epoch array iteratively
+        epochs = np.zeros((n_epochs, n_channels, samples_per_epoch), dtype=data.dtype)
+        for e in range(n_epochs):
+            start = e * samples_per_epoch
+            end = start + samples_per_epoch
+            epochs[e] = data[:, start:end]
 
     return epochs, fs
+
+# -------------------------
+# Helper: per-group extraction with optional resample
+# -------------------------
+def _extract_group_with_optional_resample(raw, channel_list, epoch_length, n_epochs, target_fs=None, verbose=True):
+    """
+    Pick channels from raw, optionally resample this picked raw to target_fs,
+    then epoch it and return (epochs, fs, picked_channel_names, samples_per_epoch).
+
+    epochs: (n_epochs, n_channels, samples_per_epoch)
+    fs: final sampling frequency for this group (float)
+    """
+    if not channel_list:
+        return None, None, [], 0
+
+    # pick channels safely (copy so original raw not modified)
+    picked = raw.copy().pick_channels(channel_list)
+    orig_fs = float(picked.info['sfreq'])
+
+    # record if we will resample
+    resampled = False
+    if target_fs is not None and abs(orig_fs - target_fs) > 1e-6:
+        if verbose:
+            print(f"  Resampling group {channel_list} from {orig_fs} Hz -> {target_fs} Hz")
+        picked.resample(target_fs, npad='auto')
+        resampled = True
+    else:
+        if verbose:
+            print(f"  Leaving group {channel_list} at native fs={orig_fs} Hz")
+
+    # recompute info after potential resample
+    final_fs = float(picked.info['sfreq'])
+    epochs, fs_returned = _extract_epochs_from_raw(picked, epoch_length, n_epochs)
+
+    # sanity check: fs_returned should equal final_fs (within tolerance)
+    if epochs is not None:
+        samples_per_epoch = epochs.shape[2]
+    else:
+        samples_per_epoch = int(round(epoch_length * final_fs))
+
+    if abs(fs_returned - final_fs) > 1e-6 and verbose:
+        print(f"  WARNING: fs mismatch after epoching: final_fs={final_fs}, fs_returned={fs_returned}")
+
+    return epochs, final_fs, picked.ch_names, samples_per_epoch, resampled, orig_fs
 
 # -------------------------
 # Loaders
@@ -143,7 +202,7 @@ def _extract_epochs_from_raw(raw, epoch_length, n_epochs=None):
 def load_training_data(edf_file_path, xml_file_path, epoch_length=30, target_fs=None, canonical_channel_lists=None):
     """
     Load EDF + XML for one recording (multi-channel).
-    - target_fs: if set, resample raw to this fs before epoching
+    - target_fs: if set, resample groups to this fs before epoching (per-group resampling)
     - canonical_channel_lists: dict like {'eeg': [...], 'eog': [...], 'emg': [...], 'other': [...]}
        if provided, epochs will be aligned to those lists (missing channels zero-padded).
     Returns:
@@ -156,9 +215,7 @@ def load_training_data(edf_file_path, xml_file_path, epoch_length=30, target_fs=
 
     raw = mne.io.read_raw_edf(edf_file_path, preload=True, verbose=False)
 
-    # Resample if requested
-    if target_fs is not None:
-        raw = resample_raw_if_needed(raw, target_fs)
+    # DO NOT resample entire raw globally here - use per-group resampling below if target_fs provided
 
     rec_info = compute_recording_info(raw, epoch_length)
     n_epochs = rec_info['n_epochs']
@@ -183,38 +240,46 @@ def load_training_data(edf_file_path, xml_file_path, epoch_length=30, target_fs=
         'record_id': Path(edf_file_path).stem
     }
 
-    # Extract per-type epochs if present and record per-group metadata
+    # Extract per-type epochs if present and record per-group metadata (use per-group helper)
     if eeg_channels:
-        eeg_raw = raw.copy().pick_channels(eeg_channels)
-        eeg_epochs, eeg_fs = _extract_epochs_from_raw(eeg_raw, epoch_length, n_epochs)
+        eeg_epochs, eeg_fs, eeg_names, eeg_samps, eeg_resampled, eeg_orig_fs = _extract_group_with_optional_resample(
+            raw, eeg_channels, epoch_length, n_epochs, target_fs=target_fs, verbose=True)
         multi_channel_data['eeg'] = eeg_epochs
         channel_info['eeg_fs'] = eeg_fs
-        channel_info['eeg_samps_per_epoch'] = eeg_epochs.shape[2]
-        channel_info['eeg_names'] = eeg_channels
+        channel_info['eeg_samps_per_epoch'] = eeg_samps
+        channel_info['eeg_names'] = eeg_names
+        channel_info['eeg_resampled'] = bool(eeg_resampled)
+        channel_info['eeg_orig_fs'] = float(eeg_orig_fs)
 
     if eog_channels:
-        eog_raw = raw.copy().pick_channels(eog_channels)
-        eog_epochs, eog_fs = _extract_epochs_from_raw(eog_raw, epoch_length, n_epochs)
+        eog_epochs, eog_fs, eog_names, eog_samps, eog_resampled, eog_orig_fs = _extract_group_with_optional_resample(
+            raw, eog_channels, epoch_length, n_epochs, target_fs=target_fs, verbose=True)
         multi_channel_data['eog'] = eog_epochs
         channel_info['eog_fs'] = eog_fs
-        channel_info['eog_samps_per_epoch'] = eog_epochs.shape[2]
-        channel_info['eog_names'] = eog_channels
+        channel_info['eog_samps_per_epoch'] = eog_samps
+        channel_info['eog_names'] = eog_names
+        channel_info['eog_resampled'] = bool(eog_resampled)
+        channel_info['eog_orig_fs'] = float(eog_orig_fs)
 
     if emg_channels:
-        emg_raw = raw.copy().pick_channels(emg_channels)
-        emg_epochs, emg_fs = _extract_epochs_from_raw(emg_raw, epoch_length, n_epochs)
+        emg_epochs, emg_fs, emg_names, emg_samps, emg_resampled, emg_orig_fs = _extract_group_with_optional_resample(
+            raw, emg_channels, epoch_length, n_epochs, target_fs=target_fs, verbose=True)
         multi_channel_data['emg'] = emg_epochs
         channel_info['emg_fs'] = emg_fs
-        channel_info['emg_samps_per_epoch'] = emg_epochs.shape[2]
-        channel_info['emg_names'] = emg_channels
+        channel_info['emg_samps_per_epoch'] = emg_samps
+        channel_info['emg_names'] = emg_names
+        channel_info['emg_resampled'] = bool(emg_resampled)
+        channel_info['emg_orig_fs'] = float(emg_orig_fs)
 
     if other_channels:
-        other_raw = raw.copy().pick_channels(other_channels)
-        other_epochs, other_fs = _extract_epochs_from_raw(other_raw, epoch_length, n_epochs)
+        other_epochs, other_fs, other_names, other_samps, other_resampled, other_orig_fs = _extract_group_with_optional_resample(
+            raw, other_channels, epoch_length, n_epochs, target_fs=target_fs, verbose=True)
         multi_channel_data['other'] = other_epochs
         channel_info['other_fs'] = other_fs
-        channel_info['other_samps_per_epoch'] = other_epochs.shape[2]
-        channel_info['other_names'] = other_channels
+        channel_info['other_samps_per_epoch'] = other_samps
+        channel_info['other_names'] = other_names
+        channel_info['other_resampled'] = bool(other_resampled)
+        channel_info['other_orig_fs'] = float(other_orig_fs)
 
     # Align to canonical names if provided (makes concatenation safe across recordings)
     if canonical_channel_lists:
@@ -223,32 +288,28 @@ def load_training_data(edf_file_path, xml_file_path, epoch_length=30, target_fs=
                 # CHANGED: use recorded from_names (if present) when aligning
                 from_names = channel_info.get(f'{key}_names', [])
                 canonical_names = canonical_channel_lists[key]
-                multi_channel_data[key] = align_epochs_to_canonical(multi_channel_data[key], from_names, canonical_names)
-                channel_info[f'{key}_names'] = canonical_names
+                # ensure we only align arrays that exist
+                if multi_channel_data.get(key) is not None:
+                    multi_channel_data[key] = align_epochs_to_canonical(multi_channel_data[key], from_names, canonical_names)
+                    channel_info[f'{key}_names'] = canonical_names
                 # after alignment, samples_per_epoch unchanged; names updated
             # If canonical asks for channel but recording missing, create zeros
             elif key in canonical_channel_lists and key not in multi_channel_data:
                 # CHANGED: determine n_samples for zero array using best available info
-                # priority: canonical_channel_lists -> channel_info specific group -> global samples per epoch -> target_fs -> fallback 125 Hz
-                if key + '_samps_per_epoch' in channel_info:
+                if f'{key}_samps_per_epoch' in channel_info:
                     n_samples = int(channel_info[f'{key}_samps_per_epoch'])
                 else:
-                    # prefer global_samps_per_epoch (from rec_info)
                     n_samples = int(channel_info.get('global_samps_per_epoch', 0))
                     if n_samples == 0:
-                        # try to infer from target_fs if caller passed it via channel_info 'target_fs' (not standard)
-                        assumed_fs = channel_info.get('target_fs', None)
-                        if assumed_fs is None:
-                            # fallback to global fs or 125
-                            assumed_fs = channel_info.get('global_fs', 125)
-                        n_samples = int(epoch_length * assumed_fs)
+                        assumed_fs = channel_info.get('global_fs', 125)
+                        n_samples = int(round(epoch_length * assumed_fs))
                 multi_channel_data[key] = np.zeros((n_epochs, len(canonical_channel_lists[key]), n_samples))
                 channel_info[f'{key}_names'] = canonical_channel_lists[key]
                 channel_info[f'{key}_samps_per_epoch'] = n_samples
                 channel_info[f'{key}_fs'] = (n_samples / epoch_length) if epoch_length > 0 else None
 
     # Print summary
-    print(f"Loaded {Path(edf_file_path).stem}: duration={rec_info['duration']:.1f}s, epochs={n_epochs}, fs={rec_info['fs']} Hz")
+    print(f"Loaded {Path(edf_file_path).stem}: duration={rec_info['duration']:.1f}s, epochs={n_epochs}, global_fs={rec_info['fs']} Hz")
     print(f"  EEG: {len(eeg_channels)}  EOG: {len(eog_channels)}  EMG: {len(emg_channels)}  Other: {len(other_channels)}")
 
     return multi_channel_data, labels, channel_info
@@ -263,8 +324,7 @@ def load_holdout_data(edf_file_path, epoch_length=30, target_fs=None, canonical_
 
     raw = mne.io.read_raw_edf(edf_file_path, preload=True, verbose=False)
 
-    if target_fs is not None:
-        raw = resample_raw_if_needed(raw, target_fs)
+    # DO NOT resample entire raw here; use per-group resampling below if desired
 
     rec_info = compute_recording_info(raw, epoch_length)
     n_epochs = rec_info['n_epochs']
@@ -274,24 +334,28 @@ def load_holdout_data(edf_file_path, epoch_length=30, target_fs=None, canonical_
 
     multi_channel_data = {}
     sampling_rates = {}
+
     if eeg_channels:
-        eeg_raw = raw.copy().pick_channels(eeg_channels)
-        eeg_epochs, eeg_fs = _extract_epochs_from_raw(eeg_raw, epoch_length, n_epochs)
+        eeg_epochs, eeg_fs, eeg_names, eeg_samps, eeg_resampled, eeg_orig_fs = _extract_group_with_optional_resample(
+            raw, eeg_channels, epoch_length, n_epochs, target_fs=target_fs, verbose=True)
         multi_channel_data['eeg'] = eeg_epochs
         sampling_rates['eeg'] = eeg_fs
+
     if eog_channels:
-        eog_raw = raw.copy().pick_channels(eog_channels)
-        eog_epochs, eog_fs = _extract_epochs_from_raw(eog_raw, epoch_length, n_epochs)
+        eog_epochs, eog_fs, eog_names, eog_samps, eog_resampled, eog_orig_fs = _extract_group_with_optional_resample(
+            raw, eog_channels, epoch_length, n_epochs, target_fs=target_fs, verbose=True)
         multi_channel_data['eog'] = eog_epochs
         sampling_rates['eog'] = eog_fs
+
     if emg_channels:
-        emg_raw = raw.copy().pick_channels(emg_channels)
-        emg_epochs, emg_fs = _extract_epochs_from_raw(emg_raw, epoch_length, n_epochs)
+        emg_epochs, emg_fs, emg_names, emg_samps, emg_resampled, emg_orig_fs = _extract_group_with_optional_resample(
+            raw, emg_channels, epoch_length, n_epochs, target_fs=target_fs, verbose=True)
         multi_channel_data['emg'] = emg_epochs
         sampling_rates['emg'] = emg_fs
+
     if other_channels:
-        other_raw = raw.copy().pick_channels(other_channels)
-        other_epochs, other_fs = _extract_epochs_from_raw(other_raw, epoch_length, n_epochs)
+        other_epochs, other_fs, other_names, other_samps, other_resampled, other_orig_fs = _extract_group_with_optional_resample(
+            raw, other_channels, epoch_length, n_epochs, target_fs=target_fs, verbose=True)
         multi_channel_data['other'] = other_epochs
         sampling_rates['other'] = other_fs
 
@@ -301,7 +365,8 @@ def load_holdout_data(edf_file_path, epoch_length=30, target_fs=None, canonical_
             if key in canonical_channel_lists and key in multi_channel_data:
                 from_names = eeg_channels if key == 'eeg' else (eog_channels if key == 'eog' else (emg_channels if key == 'emg' else other_channels))
                 canonical_names = canonical_channel_lists[key]
-                multi_channel_data[key] = align_epochs_to_canonical(multi_channel_data[key], from_names, canonical_names)
+                if multi_channel_data.get(key) is not None:
+                    multi_channel_data[key] = align_epochs_to_canonical(multi_channel_data[key], from_names, canonical_names)
             elif key in canonical_channel_lists and key not in multi_channel_data:
                 n_samples = rec_info['samples_per_epoch']
                 multi_channel_data[key] = np.zeros((n_epochs, len(canonical_channel_lists[key]), n_samples))
@@ -313,7 +378,7 @@ def load_holdout_data(edf_file_path, epoch_length=30, target_fs=None, canonical_
         'sampling_rates': sampling_rates,
         'epoch_length': epoch_length
     }
-    print(f"Holdout {record_info['record_id']}: epochs={n_epochs}, fs={rec_info['fs']} Hz, channels={len(record_info['channels'])}")
+    print(f"Holdout {record_info['record_id']}: epochs={n_epochs}, global_fs={rec_info['fs']} Hz, channels={len(record_info['channels'])}")
     return multi_channel_data, record_info
 
 # -------------------------
@@ -327,7 +392,7 @@ def load_all_training_data(training_dir, epoch_length=30, use_single_recording=F
     - training_dir: folder with .edf + .xml pairs
     - use_single_recording: left for backward compatibility (if True will call load_single_recording)
       For iteration >=4 you should set this False.
-    - target_fs: optional target sampling rate to resample all recordings to (recommended)
+    - target_fs: optional target sampling rate to resample per-group to (recommended if you want unified time-dim)
     - canonical_channel_lists: optional canonical channel ordering to align all recordings.
         Format: {'eeg': [...], 'eog': [...], 'emg': [...], 'other': [...]}
         If None, the first non-empty recording's channel lists are used as canonical.
@@ -360,7 +425,12 @@ def load_all_training_data(training_dir, epoch_length=30, use_single_recording=F
                 # keep earlier behavior: single EEG-only loader (deprecated for iter>=4)
                 epochs, labels = load_single_recording(edf, xml, epoch_length)
                 multi_channel_data = {'eeg': epochs}
-                info = {'eeg_names': [f'EEG_{i+1}' for i in range(epochs.shape[1])], 'eeg_fs': epochs.shape[2] / epoch_length, 'epoch_length': epoch_length}
+                info = {'eeg_names': [f'EEG_{i+1}' for i in range(epochs.shape[1])],
+                        'eeg_fs': epochs.shape[2] / epoch_length,
+                        'eeg_samps_per_epoch': epochs.shape[2],
+                        'epoch_length': epoch_length,
+                        'duration': epochs.shape[0] * epoch_length,
+                        'record_id': record_id}
             else:
                 multi_channel_data, labels, info = load_training_data(edf, xml, epoch_length,
                                                                       target_fs=target_fs,
@@ -397,18 +467,15 @@ def load_all_training_data(training_dir, epoch_length=30, use_single_recording=F
                             if f'{key}_samps_per_epoch' in info:
                                 n_samples = int(info[f'{key}_samps_per_epoch'])
                             else:
-                                # try per-group fs if present
                                 grp_fs = info.get(f'{key}_fs', None)
                                 if grp_fs:
-                                    n_samples = int(epoch_length * grp_fs)
+                                    n_samples = int(round(epoch_length * grp_fs))
                                 else:
-                                    # try canonical from previously inferred channel_info (outer variable)
                                     if channel_info is not None and f'{key}_samps_per_epoch' in channel_info:
                                         n_samples = int(channel_info[f'{key}_samps_per_epoch'])
                                     else:
-                                        # fallback to provided target_fs or info global fs or 125
                                         assumed_fs = target_fs if target_fs is not None else info.get('global_fs', 125)
-                                        n_samples = int(epoch_length * assumed_fs)
+                                        n_samples = int(round(epoch_length * assumed_fs))
 
                             multi_channel_data[key] = np.zeros((n_epochs, len(canonical_channel_lists[key]), n_samples))
                             info[f'{key}_names'] = canonical_channel_lists[key]

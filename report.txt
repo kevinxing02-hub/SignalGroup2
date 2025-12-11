@@ -6,83 +6,123 @@
 
 Processing R1...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R1: duration=32520.0s, epochs=1084, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R1: duration=32520.0s, epochs=1084, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 Inferred canonical channel lists from first recording.
 
 Processing R10...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R10: duration=32520.0s, epochs=1084, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R10: duration=32520.0s, epochs=1084, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 
 Processing R2...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R2: duration=32370.0s, epochs=1079, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R2: duration=32370.0s, epochs=1079, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 
 Processing R3...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R3: duration=31470.0s, epochs=1049, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R3: duration=31470.0s, epochs=1049, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 
 Processing R4...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R4: duration=26250.0s, epochs=875, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R4: duration=26250.0s, epochs=875, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 
 Processing R5...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R5: duration=32520.0s, epochs=1084, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R5: duration=32520.0s, epochs=1084, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 
 Processing R6...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R6: duration=32520.0s, epochs=1084, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R6: duration=32520.0s, epochs=1084, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 
 Processing R7...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R7: duration=27570.0s, epochs=919, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R7: duration=27570.0s, epochs=919, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 
 Processing R8...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R8: duration=28770.0s, epochs=959, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R8: duration=28770.0s, epochs=959, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 
 Processing R9...
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EEG(sec)', 'EEG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EOG(L)', 'EOG(R)'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
+  Leaving group ['EMG'] at native fs=125.0 Hz
 NOTE: pick_channels() is a legacy function. New code should use inst.pick(...).
-Loaded R9: duration=32580.0s, epochs=1086, fs=125.0 Hz
+  Leaving group ['ECG'] at native fs=125.0 Hz
+Loaded R9: duration=32580.0s, epochs=1086, global_fs=125.0 Hz
   EEG: 2  EOG: 2  EMG: 1  Other: 1
 Combined EEG shape: (10303, 2, 3750)
 Combined EOG shape: (10303, 2, 3750)
@@ -90,7 +130,7 @@ Combined EMG shape: (10303, 1, 3750)
 Combined OTHER shape: (10303, 1, 3750)
 
 Total loaded: 10303 epochs from 10 recordings
-Channel info keys: ['duration', 'eeg_fs', 'eeg_names', 'eeg_samps_per_epoch', 'emg_fs', 'emg_names', 'emg_samps_per_epoch', 'eog_fs', 'eog_names', 'eog_samps_per_epoch', 'epoch_length', 'global_fs', 'global_samps_per_epoch', 'other_fs', 'other_names', 'other_samps_per_epoch', 'record_id']
+Channel info keys: ['duration', 'eeg_fs', 'eeg_names', 'eeg_orig_fs', 'eeg_resampled', 'eeg_samps_per_epoch', 'emg_fs', 'emg_names', 'emg_orig_fs', 'emg_resampled', 'emg_samps_per_epoch', 'eog_fs', 'eog_names', 'eog_orig_fs', 'eog_resampled', 'eog_samps_per_epoch', 'epoch_length', 'global_fs', 'global_samps_per_epoch', 'other_fs', 'other_names', 'other_orig_fs', 'other_resampled', 'other_samps_per_epoch', 'record_id']
 Label distribution:
   Wake: 3484 (33.8%)
   N1: 275 (2.7%)
