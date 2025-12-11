@@ -1,30 +1,13 @@
+# src/feature_selection.py
 import numpy as np
+from typing import Optional, Tuple, Dict, Any
 from sklearn.feature_selection import VarianceThreshold, mutual_info_classif
 from sklearn.model_selection import LeaveOneGroupOut
+from sklearn.preprocessing import RobustScaler
 
-"""
-Robust LOSO feature selection pipeline.
-
-Public API:
-    select_features(features: np.ndarray,
-                    labels: np.ndarray,
-                    config,
-                    groups: Optional[np.ndarray] = None)
-    -> (selected_features, selector_obj)
-
-Behaviour highlights:
- - If groups is provided (or config.LOSO_ENABLED True and config provides groups),
-   we perform LOSO across unique groups and aggregate per-fold selections.
- - We compute selection frequency and keep features with frequency >=
-   config.FEAT_STABILITY_THRESHOLD (default 1.0 → chosen every fold).
- - If no features survive the stability threshold we fall back to a global selection
-   (same 3 stages, applied on whole dataset) or pick top-k by MI to guarantee >0 output.
- - Always returns (selected_features, selector_obj) where selector implements:
-     - transform(X)
-     - get_support(indices=True/False)
-     - _set_original_n_features(n)
-"""
-
+# -------------------------
+# IndexSelector: minimal selector object (backwards-compatible)
+# -------------------------
 class IndexSelector:
     def __init__(self, indices):
         self.indices_ = np.asarray(indices, dtype=int)
@@ -45,18 +28,24 @@ class IndexSelector:
     def _set_original_n_features(self, n):
         self._original_n_features = int(n)
 
-# ------------------ Helper: per-train selection (same logic as your original stages) ------------------
-def _per_train_selection(X_train, y_train, config):
-    """Run the 3-stage pipeline on training data and return selected original feature indices."""
+# -------------------------
+# Per-train selection: 3-stage pipeline used inside folds/global
+# -------------------------
+def _per_train_selection(X_train: np.ndarray, y_train: np.ndarray, config) -> np.ndarray:
+    """
+    Stage 1: Variance thresholding (relative threshold)
+    Stage 2: Correlation pruning (keep highest-variance in correlated groups)
+    Stage 3: Mutual information top-k selection
+    Returns indices (relative to original feature numbering).
+    """
     X_train = np.asarray(X_train)
     n_samples, n_features = X_train.shape
 
-    # Configurable parameters (defaults kept from your original code)
     top_k = getattr(config, "FEATURE_SELECTION_TOP_K", 40)
     var_ratio = getattr(config, "VARIANCE_THRESHOLD_RATIO", 1e-4)
     corr_thresh = getattr(config, "CORRELATION_THRESHOLD", 0.95)
 
-    # Stage 1: Variance thresholding (conservative)
+    # Stage 1: variance threshold
     variances = np.var(X_train, axis=0)
     max_var = np.max(variances) if variances.size > 0 else 0.0
     threshold = max(max_var * var_ratio, 1e-12)
@@ -72,32 +61,34 @@ def _per_train_selection(X_train, y_train, config):
         X_s1 = X_train.copy()
         idx_s1 = np.arange(n_features)
 
-    # Stage 2: Correlation pruning (keep highest-variance within correlated groups)
+    # Stage 2: correlation pruning (keep highest-variance feature in correlated clusters)
     if X_s1.shape[1] == 1:
         X_s2 = X_s1
         idx_s2 = idx_s1
     else:
-        corr = np.corrcoef(X_s1, rowvar=False)
-        abs_corr = np.abs(corr)
-        var_stage1 = variances[idx_s1]
-        sorted_idx = np.argsort(var_stage1)[::-1]  # order of preference (indices into idx_s1)
-        keep_mask = np.ones(abs_corr.shape[0], dtype=bool)
-
-        for ii in sorted_idx:
-            if not keep_mask[ii]:
-                continue
-            correlated = (abs_corr[ii] > corr_thresh)
-            correlated[ii] = False
-            keep_mask[correlated] = False
-
-        X_s2 = X_s1[:, keep_mask]
-        idx_s2 = idx_s1[keep_mask]
-
-        if X_s2.shape[1] == 0:
+        try:
+            corr = np.corrcoef(X_s1, rowvar=False)
+            abs_corr = np.abs(corr)
+            var_stage1 = variances[idx_s1]
+            # preference order: higher variance earlier
+            sorted_idx = np.argsort(var_stage1)[::-1]  # indices into idx_s1
+            keep_mask = np.ones(abs_corr.shape[0], dtype=bool)
+            for ii in sorted_idx:
+                if not keep_mask[ii]:
+                    continue
+                correlated = (abs_corr[ii] > corr_thresh)
+                correlated[ii] = False
+                keep_mask[correlated] = False
+            X_s2 = X_s1[:, keep_mask]
+            idx_s2 = idx_s1[keep_mask]
+            if X_s2.shape[1] == 0:
+                X_s2 = X_s1.copy()
+                idx_s2 = idx_s1.copy()
+        except Exception:
             X_s2 = X_s1.copy()
             idx_s2 = idx_s1.copy()
 
-    # Stage 3: Mutual information top-k (applied on the stage2 set)
+    # Stage 3: mutual information top-k
     if X_s2.shape[1] <= top_k:
         final_indices = idx_s2
     else:
@@ -108,72 +99,122 @@ def _per_train_selection(X_train, y_train, config):
         except Exception:
             final_indices = idx_s2
 
-    # Ensure unique, sorted indices (relative to original feature numbering)
     final_indices = np.unique(np.asarray(final_indices, dtype=int))
     return final_indices
 
-# ------------------ Main entrypoint ------------------
-def select_features(features: np.ndarray, labels: np.ndarray, config, groups: np.ndarray = None):
+# -------------------------
+# Main entrypoint
+# -------------------------
+def select_features(features: np.ndarray,
+                    labels: np.ndarray,
+                    config,
+                    groups: Optional[np.ndarray] = None,
+                    return_diagnostics: bool = False
+                    ) -> Tuple[np.ndarray, IndexSelector, Optional[Dict[str, Any]]]:
+    """
+    Robust feature selection with LOSO aggregation and fallbacks.
+
+    Returns:
+      - By default (return_diagnostics==False): (selected_features, selector)
+      - If return_diagnostics==True: (selected_features, selector, diagnostics_dict)
+
+    diagnostics contains keys: selection_counts, freq, per_fold_selected, successful_folds, final_indices, mi_scores (optional), variances
+    """
     print(f"\n=== Robust Feature Selection (Iteration {getattr(config, 'CURRENT_ITERATION', 'N/A')}) ===")
-    features = np.asarray(features)
-    n_samples, n_features = features.shape
+    X = np.asarray(features)
+    y = np.asarray(labels)
+    if X.ndim != 2:
+        raise ValueError("features must be 2D array (n_samples x n_features)")
+    n_samples, n_features = X.shape
     print(f"Initial feature count: {n_features}")
 
-    # Basic input checks
     if n_features == 0:
-        print("No features available — returning empty array and identity selector")
         sel = IndexSelector(np.arange(0))
         sel._set_original_n_features(n_features)
-        return features, sel
+        diagnostics = {"selection_counts": np.zeros(0, dtype=int), "freq": np.zeros(0, dtype=float),
+                       "per_fold_selected": [], "successful_folds": 0, "final_indices": np.array([], dtype=int)}
+        if return_diagnostics:
+            return X, sel, diagnostics
+        else:
+            return X, sel
 
-    if labels is None or len(labels) != n_samples:
+    if y is None or len(y) != n_samples:
         raise ValueError("Labels must be provided and match number of feature rows")
 
-    # Config switches & defaults
+    # Read config
     enabled = getattr(config, "FEATURE_SELECTION_ENABLED", True)
-    min_features_iter2 = getattr(config, "FEATURE_SELECTION_MIN_FEATURES", 100)
+    do_scale = getattr(config, "FEATURE_SELECTION_SCALE", False)
     loso_enabled = getattr(config, "LOSO_ENABLED", True)
-    stability_threshold = getattr(config, "FEAT_STABILITY_THRESHOLD", 1.0)  # fraction of folds a feature must appear in
+    stability_threshold = getattr(config, "FEAT_STABILITY_THRESHOLD", 1.0)
+    min_features_iter2 = getattr(config, "FEATURE_SELECTION_MIN_FEATURES", 100)
     top_k = getattr(config, "FEATURE_SELECTION_TOP_K", 40)
+    random_state = getattr(config, "RANDOM_STATE", None)
 
+    # If disabled return identity selector
     if not enabled:
-        print("Feature selection disabled by config. Returning original features and identity selector.")
         sel = IndexSelector(np.arange(n_features))
         sel._set_original_n_features(n_features)
-        return features, sel
+        diagnostics = {"selection_counts": np.zeros(n_features, dtype=int), "freq": np.ones(n_features, dtype=float),
+                       "per_fold_selected": [], "successful_folds": 0, "final_indices": np.arange(n_features)}
+        if return_diagnostics:
+            return X, sel, diagnostics
+        else:
+            return X, sel
 
-    # Iteration 2 skip (preserve behaviour)
+    # Iteration 2 special-case skip
     if getattr(config, "CURRENT_ITERATION", None) == 2 and n_features < min_features_iter2:
-        print(f"Iteration 2 and features < {min_features_iter2} → skipping feature selection.")
         sel = IndexSelector(np.arange(n_features))
         sel._set_original_n_features(n_features)
-        return features, sel
+        diagnostics = {"selection_counts": np.zeros(n_features, dtype=int), "freq": np.ones(n_features, dtype=float),
+                       "per_fold_selected": [], "successful_folds": 0, "final_indices": np.arange(n_features)}
+        if return_diagnostics:
+            return X, sel, diagnostics
+        else:
+            return X, sel
 
-    # If LOSO desired, groups must be provided either via argument or config
-    if loso_enabled and groups is None:
+    # Optional scaling
+    X_proc = X.copy()
+    scaler = None
+    if do_scale:
+        try:
+            scaler = RobustScaler()
+            X_proc = scaler.fit_transform(X_proc)
+        except Exception:
+            X_proc = X.copy()
+            scaler = None
+
+    # Groups: prefer argument, else config.GROUPS
+    if groups is None:
         groups = getattr(config, "GROUPS", None)
 
-    # If LOSO is enabled and groups are available, run LOSO aggregation
-    if loso_enabled and groups is not None:
+    use_loso = loso_enabled and (groups is not None)
+    diagnostics: Dict[str, Any] = {}
+    diagnostics['per_fold_selected'] = []
+    diagnostics['selection_counts'] = np.zeros(n_features, dtype=int)
+    diagnostics['successful_folds'] = 0
+    diagnostics['mi_scores'] = None
+    diagnostics['variances'] = np.var(X_proc, axis=0)
+
+    final_indices = np.array([], dtype=int)
+
+    if use_loso:
         groups = np.asarray(groups)
         if len(groups) != n_samples:
             print("Warning: provided groups length does not match samples. Falling back to non-LOSO selection.")
-            groups = None
+            use_loso = False
 
-    if loso_enabled and groups is not None:
+    if use_loso:
         print("\n[Stage LOSO] Running Leave-One-Group-Out per-training selection to find stable features...")
         logo = LeaveOneGroupOut()
         unique_groups = np.unique(groups)
         n_folds = len(unique_groups)
         print(f"  Unique groups (folds): {n_folds}")
 
-        # track selection counts for original feature indices
-        selection_counts = np.zeros(n_features, dtype=int)
         fold_idx = 0
-        for train_idx, _ in logo.split(features, labels, groups):
+        for train_idx, _ in logo.split(X_proc, y, groups):
             fold_idx += 1
-            X_train = features[train_idx, :]
-            y_train = labels[train_idx]
+            X_train = X_proc[train_idx, :]
+            y_train = y[train_idx]
             try:
                 selected_in_fold = _per_train_selection(X_train, y_train, config)
             except Exception as e:
@@ -181,17 +222,17 @@ def select_features(features: np.ndarray, labels: np.ndarray, config, groups: np
                 continue
 
             if selected_in_fold.size == 0:
-                # nothing selected in this fold — skip counting
                 print(f"  Fold {fold_idx}: no features selected on train (skipping).")
                 continue
 
-            selection_counts[selected_in_fold] += 1
+            diagnostics['selection_counts'][selected_in_fold] += 1
+            diagnostics['per_fold_selected'].append(selected_in_fold)
+            diagnostics['successful_folds'] += 1
             print(f"  Fold {fold_idx}: selected {selected_in_fold.size} features.")
 
-        # Convert counts to frequency fraction
-        # Note: use number of folds that actually ran (n_folds) — not number of successful folds
-        freq = selection_counts.astype(float) / float(n_folds)
-        # choose features with freq >= threshold (stability)
+        # frequency fraction based on total folds (unique_groups)
+        freq = diagnostics['selection_counts'].astype(float) / float(len(unique_groups))
+        diagnostics['freq'] = freq
         stable_mask = freq >= stability_threshold
         stable_indices = np.where(stable_mask)[0]
         print(f"  Features meeting stability threshold ({stability_threshold}): {stable_indices.size}")
@@ -200,44 +241,49 @@ def select_features(features: np.ndarray, labels: np.ndarray, config, groups: np
             final_indices = np.asarray(stable_indices, dtype=int)
         else:
             print("  No features survived LOSO stability threshold. Falling back to global selection (no LOSO).")
-            # fallback: run the per-train selection on the whole dataset
-            final_indices = _per_train_selection(features, labels, config)
+            final_indices = _per_train_selection(X_proc, y, config)
             if final_indices.size == 0:
-                # ultimate fallback: pick top_k by mutual information on whole data (ensure at least 1)
                 print("  Global selection returned 0 features; falling back to top-k MI.")
                 try:
-                    mi_scores = mutual_info_classif(features, labels, discrete_features=False)
+                    mi_scores = mutual_info_classif(X_proc, y, discrete_features=False)
+                    diagnostics['mi_scores'] = mi_scores
                     top_local = np.argsort(mi_scores)[::-1][:max(1, top_k)]
                     final_indices = np.unique(top_local)
                 except Exception:
                     final_indices = np.arange(min(1, n_features))
-
     else:
-        # LOSO not used — use single-shot selection on whole dataset (preserves original behaviour)
+        # Global selection on full dataset
         print("\n[Stage Global] LOSO not enabled or groups not provided — running global selection on whole dataset.")
-        final_indices = _per_train_selection(features, labels, config)
+        final_indices = _per_train_selection(X_proc, y, config)
         if final_indices.size == 0:
             print("  Global selection removed all features — falling back to top-k MI.")
             try:
-                mi_scores = mutual_info_classif(features, labels, discrete_features=False)
+                mi_scores = mutual_info_classif(X_proc, y, discrete_features=False)
+                diagnostics['mi_scores'] = mi_scores
                 top_local = np.argsort(mi_scores)[::-1][:max(1, top_k)]
                 final_indices = np.unique(top_local)
             except Exception:
                 final_indices = np.arange(min(1, n_features))
 
-    # final safety: ensure at least one index and indices are within bounds
+    # Safety: ensure valid indices
     final_indices = np.asarray(final_indices, dtype=int)
     final_indices = final_indices[(final_indices >= 0) & (final_indices < n_features)]
     if final_indices.size == 0:
-        # emergency fallback to the single most variant feature
         print("  Emergency fallback: selecting single highest-variance feature.")
-        variances = np.var(features, axis=0)
+        variances = diagnostics.get('variances', np.var(X_proc, axis=0))
         final_indices = np.array([int(np.argmax(variances))], dtype=int)
 
-    # Build output selected matrix and selector
-    selected_features = features[:, final_indices]
+    # Build selected_features matrix and selector
+    selected_features = X[:, final_indices]
     selector = IndexSelector(final_indices)
     selector._set_original_n_features(n_features)
 
+    diagnostics['final_indices'] = final_indices
+    diagnostics['selected_count'] = final_indices.size
+
     print(f"Final selected feature count: {final_indices.size}")
-    return selected_features, selector
+
+    if return_diagnostics:
+        return selected_features, selector, diagnostics
+    else:
+        return selected_features, selector

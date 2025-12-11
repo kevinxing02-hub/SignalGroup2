@@ -39,11 +39,57 @@ if not os.path.exists(OUTPUT_DIR):
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # -- Preprocessing --
-LOW_PASS_FILTER_FREQ = 40  # Hz
+# ------------------------------
+# Preprocessing parameters (tweak these for experiments)
+# ------------------------------
+# Recommended defaults chosen to:
+#  - remove baseline wander without strongly attenuating delta (0.5-4 Hz)
+#  - notch powerline at 50 Hz (Europe) and optionally harmonics
+#  - use zero-phase filtering (filtfilt) with safe padding choices
+PREPROCESS = {
+    # Baseline (high-pass) cutoff in Hz. Keep <0.5 to preserve delta band.
+    # Hardware HP at 0.15 Hz exists; software HP typically 0.2-0.5 Hz. 0.3 is a sensible default.
+    "highpass": 0.30,
+
+    # Final lowpass cutoff (or bandpass high edge) in Hz. 35-45 Hz typical for sleep EEG.
+    "lowpass": 40.0,
+
+    # Filter orders (for butterworth / sos). Higher order = steeper roll-off but more transients.
+    "hp_order": 2,      # high-pass order (small to avoid strong transients)
+    "bp_order": 4,      # bandpass / lowpass order
+
+    # Notch filter settings
+    "notch_freq": 50.0,       # fundamental (set 60.0 if US)
+    "notch_Q": 30.0,          # quality factor for iirnotch (narrow but effective)
+    "notch_harmonics": True,  # also apply at 2x, 3x if below Nyquist
+
+    # filtfilt padding options (see scipy.signal.filtfilt)
+    # padtype: 'odd' or 'even' recommended for biomedical signals; None disables padding.
+    # padlen: None -> let scipy compute default padlen (3*(len(a)-1)) OR set explicit int
+    # Setting an explicit padlen can help if you know signal length, but default is usually fine.
+    "padtype": "odd",   # 'odd'/'even'/'constant'/None
+    "padlen": None,     # None -> scipy default; or set e.g. int(3 * max_filter_len)
+
+    # If you want to preprocess the continuous recording (recommended) rather than per-epoch
+    "process_continuous": True,
+
+    # If debug/diagnostic plots should be created in OUTPUT_DIR
+    "debug_plots": False,
+
+    # Directory to save debug/diagnostic plots (default uses project OUTPUT_DIR)
+    "debug_outputs_dir": OUTPUT_DIR if 'OUTPUT_DIR' in globals() else "./outputs/",
+
+    # Whether to apply simple per-epoch normalization (zero-mean, unit-variance)
+    "apply_epoch_normalization": False,
+
+    # Safety limits (to avoid accidentally aggressive settings)
+    "min_highpass": 0.01,  # don't allow >0.5 recommended without conscious choice
+    "max_lowpass": 0.5 * 125.0  # depends on expected global fs (e.g. 125Hz)
+}
 
 # Whether to apply per-channel normalization in preprocessing.py
 # (e.g. zero-mean, unit-variance per epoch)
-APPLY_NORMALIZATION = True   # set True if you want to enable it
+#APPLY_NORMALIZATION = False   # set True if you want to enable it
 
 # -- Feature Extraction --
 # (Add feature-specific parameters here)
@@ -84,8 +130,19 @@ CORRELATION_THRESHOLD = 0.95             # Remove features with |r| > threshold
 # --------------------------
 LOSO_ENABLED = True
 LOSO_MAX_FOLDS = None
-FEAT_STABILITY_THRESHOLD = 1.0
+#FEAT_STABILITY_THRESHOLD = 1.0
 GROUPS = None  # 可选：如果你希望在 config 中直接放 groups，否则在函数调用时传入
+#
+# feature selection tuning
+FEATURE_SELECTION_ENABLED = True
+FEATURE_SELECTION_SCALE = True  # whether to RobustScale before selection
+FEATURE_SELECTION_TOP_K = 40
+VARIANCE_THRESHOLD_RATIO = 1e-4
+CORRELATION_THRESHOLD = 0.95
+FEAT_STABILITY_THRESHOLD = 1.0  # prefer 0.8 over 1.0 for robustness
+LOSO_ENABLED = True
+RANDOM_STATE = 42
+
 
 # Nonlinear features (Iteration 4 final)
 ENABLE_NONLINEAR_FEATURES = True

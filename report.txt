@@ -142,15 +142,12 @@ Data loading summary:
   EEG: (10303, 2, 3750)
   EOG: (10303, 2, 3750)
   EMG: (10303, 1, 3750)
+  OTHER: (10303, 1, 3750)
   Labels: (10303,)
   Unique recordings (subjects): 10
   Total epochs: 10303
 
 === STEP 2: PREPROCESSING ===
-Preprocessing data for iteration 4...
-Iteration 3: Removing EOG artifacts from EEG using LinearRegression...
-Iteration 3: Applying EMG-based adaptive low-pass filtering on EEG...
-EMG 20–40 Hz power threshold (75th percentile): 2.0723e-11
 Preprocessed EEG shape: (10303, 2, 3750)
 
 === STEP 3: FEATURE EXTRACTION ===
@@ -165,16 +162,28 @@ Extracted features shape: (10303, 109)
 === Robust Feature Selection (Iteration 4) ===
 Initial feature count: 109
 
-[Stage Global] LOSO not enabled or groups not provided — running global selection on whole dataset.
-Final selected feature count: 14
-Selected features shape: (10303, 14)
+[Stage LOSO] Running Leave-One-Group-Out per-training selection to find stable features...
+  Unique groups (folds): 10
+  Fold 1: selected 13 features.
+  Fold 2: selected 13 features.
+  Fold 3: selected 13 features.
+  Fold 4: selected 13 features.
+  Fold 5: selected 13 features.
+  Fold 6: selected 13 features.
+  Fold 7: selected 13 features.
+  Fold 8: selected 13 features.
+  Fold 9: selected 13 features.
+  Fold 10: selected 13 features.
+  Features meeting stability threshold (1.0): 11
+Final selected feature count: 11
+Selected features shape: (10303, 11)
 
 === STEP 5: CLASSIFICATION ===
 
 ====================================================
  Training Classifier (Iteration 4)
 ====================================================
-Features shape: (10303, 14)
+Features shape: (10303, 11)
 Labels shape:   (10303,)
 
 
@@ -183,19 +192,19 @@ Labels shape:   (10303,)
 
 === train_classifier (CNN/RF/HYBRID) ===
 Model type: RF
-Features shape: (10303, 14)
+Features shape: (10303, 11)
 Labels shape: (10303,)
 Training Random Forest on provided features (flat expected).
 Random Forest trained.
 Iteration 4: delegated training complete.
-Trained random_forest classifier
+Trained classifier: random_forest
 Data cached to cache/model_iter4.joblib
-Saved trained model, scaler and selector to cache: model_iter4.joblib
+Saved model bundle to cache: model_iter4.joblib
 
 === STEP 6: VISUALIZATION ===
 Visualizing results... (debug mode)
 DEBUG: No loso_aggregated used (either not provided or not Iteration 2).
-DEBUG: features.shape = (10303, 14), labels.shape = (10303,)
+DEBUG: features.shape = (10303, 11), labels.shape = (10303,)
 DEBUG: Performed stratified train_test_split(test_size=0.2, random_state=42).
 DEBUG: y_test (from fallback split) -> dtype=int64, shape=(2061,), preview=[4, 2, 2, 2, 4, 2, 2, 2]
 DEBUG: y_pred (model.predict on X_test) -> dtype=int64, shape=(2061,), preview=[4, 2, 2, 2, 4, 2, 2, 2]
@@ -205,7 +214,7 @@ DEBUG: y_pred (model.predict on X_test) -> dtype=int64, shape=(2061,), preview=[
 ✓ Saved figure: ./outputs/visuals_iter4\class_dist_visual.png
 Visualization complete. Files saved at: S:\KTH_1st\SignalProcessingData\SignalGroup2\outputs\visuals_iter4
 
-=== STEP 7: PROCESSING LOG & REPORT GENERATION ===
+=== STEP 7: REPORT GENERATION ===
 
 
 
@@ -215,23 +224,23 @@ Visualization complete. Files saved at: S:\KTH_1st\SignalProcessingData\SignalGr
 RandomForestClassifier
 
 ## Performance Metrics (20% Test Split)
-Accuracy: 0.978
-Kappa: 0.969
-Macro F1-score: 0.980
-Weighted F1-score: 0.978
+Accuracy: 0.970
+Kappa: 0.959
+Macro F1-score: 0.973
+Weighted F1-score: 0.970
 
 
 Confusion Matrix:
       Wake  N1   N2   N3  REM
-Wake   674   0   15    3    5
+Wake   667   1   21    1    7
 N1       0  55    0    0    0
-N2       2   1  745   13    1
-N3       0   0    4  320    0
-REM      0   0    2    0  221
+N2       4   1  738   15    4
+N3       0   0    7  317    0
+REM      0   0    0    0  223
 
 ## Features
 ### Feature Count
-- Total features: 14
+- Total features: 11
 
 Note: Feature details for Iteration 4 may include multi-signal features (EEG+EOG+EMG).
 
