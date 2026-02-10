@@ -1,0 +1,8 @@
+{
+  "no_z_diag": "outputs\\debug_run_20251210_163333\\diag_no_z_20251210_163504.json",
+  "with_z_diag": "outputs\\debug_run_20251210_163333\\diag_with_z_20251210_163625.json",
+  "no_z_selected_shape": null,
+  "with_z_selected_shape": null,
+  "no_z_model_present": false,
+  "with_z_model_present": false
+}
